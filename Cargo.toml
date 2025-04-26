@@ -1,0 +1,13 @@
+[package]
+name = "jp2view"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openjp2 = { version = "0.5.3", path = "../../openjp2/openjp2-rs" }
+
+objc = "0.2.7"
+cocoa = "0.24.0"
+core-foundation = "0.9.3"
+core-graphics = "0.22.3"
+foreign-types = "0.3.2"
