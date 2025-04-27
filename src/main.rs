@@ -11,7 +11,7 @@ use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThr
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSAutoresizingMaskOptions,
     NSBackingStoreType, NSBezelStyle, NSBitmapImageRep, NSButton, NSEvent, NSImage, NSImageScaling,
-    NSImageView, NSMagnificationGestureRecognizer, NSResponder, NSScrollView, NSSlider, NSWindow,
+    NSImageView, NSMagnificationGestureRecognizer, NSScrollView, NSSlider, NSWindow,
     NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{
@@ -1043,9 +1043,7 @@ define_class!(
                             if let Some(image) = image {
                                 *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                                unsafe {
-                                    let _: Bool = msg_send![self, handleDisplayImage];
-                                }
+                                let _: Bool = msg_send![self, handleDisplayImage];
                                 return Bool::YES;
                             }
                         }
@@ -1314,15 +1312,11 @@ define_class!(
                             *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
                             // Update the image view
-                            unsafe {
-                                let _: Bool = msg_send![self, handleDisplayImage];
-                            }
+                            let _: Bool = msg_send![self, handleDisplayImage];
 
                             // Also update slider position to match current zoom
                             if let Some(slider) = self.ivars().zoom_slider.get() {
-                                unsafe {
-                                    slider.setDoubleValue(new_zoom);
-                                }
+                                slider.setDoubleValue(new_zoom);
                             }
 
                             return Bool::YES;
@@ -1471,7 +1465,7 @@ impl AppDelegate {
 
         unsafe {
             open_button.setTitle(ns_string!("Open JP2"));
-            open_button.setBezelStyle(NSBezelStyle::Rounded);
+            open_button.setBezelStyle(NSBezelStyle::Automatic);
             open_button.setAction(Some(sel!(openFile:)));
 
             // Convert self to AnyObject for target
@@ -1489,7 +1483,7 @@ impl AppDelegate {
 
         unsafe {
             gradient_button.setTitle(ns_string!("Gradient"));
-            gradient_button.setBezelStyle(NSBezelStyle::Rounded);
+            gradient_button.setBezelStyle(NSBezelStyle::Automatic);
             gradient_button.setAction(Some(sel!(createGradient:)));
 
             // Convert self to AnyObject for target
@@ -1508,7 +1502,7 @@ impl AppDelegate {
 
         unsafe {
             checkerboard_button.setTitle(ns_string!("Checkerboard"));
-            checkerboard_button.setBezelStyle(NSBezelStyle::Rounded);
+            checkerboard_button.setBezelStyle(NSBezelStyle::Automatic);
             checkerboard_button.setAction(Some(sel!(createCheckerboard:)));
 
             // Convert self to AnyObject for target
