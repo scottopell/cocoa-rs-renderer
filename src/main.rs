@@ -11,8 +11,8 @@ use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThr
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSAutoresizingMaskOptions,
     NSBackingStoreType, NSBezelStyle, NSBitmapImageRep, NSButton, NSEvent, NSImage, NSImageScaling,
-    NSImageView, NSResponder, NSScrollView, NSSlider, NSWindow, NSWindowDelegate,
-    NSWindowStyleMask,
+    NSImageView, NSMagnificationGestureRecognizer, NSResponder, NSScrollView, NSSlider, NSWindow,
+    NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{
     ns_string, NSArray, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSURL,
@@ -917,6 +917,8 @@ struct AppDelegateIvars {
     zoom_slider: OnceCell<Retained<NSSlider>>,
     last_mouse_location: RefCell<NSPoint>,
     is_panning: RefCell<bool>,
+    magnification_recognizer: OnceCell<Retained<NSMagnificationGestureRecognizer>>,
+    base_zoom_level: RefCell<f64>,
 }
 
 define_class!(
@@ -1267,13 +1269,81 @@ define_class!(
             *self.ivars().is_panning.borrow_mut() = false;
             Bool::YES
         }
+
+        #[unsafe(method(handlePinchGesture:))]
+        fn handlePinchGesture(&self, sender: Option<&NSObject>) -> Bool {
+            if let Some(recognizer) = sender {
+                unsafe {
+                    let state: isize = msg_send![recognizer, state];
+
+                    // Handle different gesture states
+                    if state == 1 { // GSBegan (1)
+                        println!("DEBUG: Pinch gesture began");
+
+                        // Store current zoom level as base for this gesture sequence
+                        if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                            let renderer_guard = renderer.lock().unwrap();
+                            *self.ivars().base_zoom_level.borrow_mut() = renderer_guard.zoom_level;
+                        } else {
+                            *self.ivars().base_zoom_level.borrow_mut() = 1.0;
+                        }
+                    }
+
+                    // Get the magnification factor from the gesture recognizer
+                    let magnification: f64 = msg_send![recognizer, magnification];
+                    println!("DEBUG: Pinch magnification: {}", magnification);
+
+                    // Apply zoom change based on the base zoom level and magnification
+                    let base_zoom = *self.ivars().base_zoom_level.borrow();
+                    let new_zoom = base_zoom * (1.0 + magnification);
+
+                    // Update the zoom in the renderer
+                    if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                        {
+                            let mut renderer_guard = renderer.lock().unwrap();
+                            renderer_guard.set_zoom(new_zoom);
+                        }
+
+                        // Re-render the image with new zoom level
+                        let image = {
+                            let renderer_guard = renderer.lock().unwrap();
+                            renderer_guard.render()
+                        };
+
+                        if let Some(image) = image {
+                            *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+
+                            // Update the image view
+                            unsafe {
+                                let _: Bool = msg_send![self, handleDisplayImage];
+                            }
+
+                            // Also update slider position to match current zoom
+                            if let Some(slider) = self.ivars().zoom_slider.get() {
+                                unsafe {
+                                    slider.setDoubleValue(new_zoom);
+                                }
+                            }
+
+                            return Bool::YES;
+                        }
+                    }
+                }
+            }
+
+            Bool::NO
+        }
     }
 );
 
 // Implement custom methods for AppDelegate
 impl AppDelegate {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
-        let this = Self::alloc(mtm).set_ivars(AppDelegateIvars::default());
+        let ivars = AppDelegateIvars {
+            base_zoom_level: RefCell::new(1.0),
+            ..Default::default()
+        };
+        let this = Self::alloc(mtm).set_ivars(ivars);
         unsafe { msg_send![super(this), init] }
     }
 
@@ -1333,6 +1403,23 @@ impl AppDelegate {
 
             // Configure image view properties
             new_image_view.setImageScaling(NSImageScaling::ScaleProportionallyDown);
+
+            // Create and configure the magnification gesture recognizer for pinch-to-zoom
+            let recognizer = NSMagnificationGestureRecognizer::alloc(mtm);
+            let recognizer: Retained<NSMagnificationGestureRecognizer> =
+                msg_send![recognizer, init];
+
+            // Set the action and target for the gesture recognizer
+            recognizer.setAction(Some(sel!(handlePinchGesture:)));
+            let target: Option<&AnyObject> = Some(self.as_ref());
+            recognizer.setTarget(target);
+
+            // Add the gesture recognizer to the image view
+            let view_ref: &AnyObject = new_image_view.as_ref();
+            let _: () = msg_send![view_ref, addGestureRecognizer: &*recognizer];
+
+            // Store the gesture recognizer
+            let _ = self.ivars().magnification_recognizer.set(recognizer);
 
             // Set the image view as the document view
             scroll_view.setDocumentView(Some(&*new_image_view));
