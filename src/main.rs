@@ -52,6 +52,12 @@ define_class!(
             // Set up the window
             window.setTitle(ns_string!("JP2 Viewer"));
             window.center();
+
+            // Activate the application first to ensure it's frontmost
+            let app = NSApplication::sharedApplication(mtm);
+            unsafe { app.activate() };
+
+            // Then make window key and visible
             window.makeKeyAndOrderFront(None);
 
             // Create and add a button to the window
@@ -268,7 +274,6 @@ impl AppDelegate {
     }
 
     fn create_placeholder_image(&self, width: usize, height: usize) -> Option<Retained<NSImage>> {
-        let mtm: MainThreadMarker = self.mtm();
         let size = NSSize::new(width as f64, height as f64);
 
         let alloc = NSImage::alloc();
@@ -351,10 +356,8 @@ fn main() {
     // Set the delegate
     app.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
-    // Activate the application
-    // This method is deprecated but still works
-    #[allow(deprecated)]
-    app.activateIgnoringOtherApps(true);
+    // Activation is now done in applicationDidFinishLaunching
+    // to properly sequence window visibility
 
     println!("DEBUG: Starting application run loop");
     app.run();
