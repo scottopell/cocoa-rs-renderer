@@ -44,6 +44,9 @@ struct ImageRenderer {
 
     // Source pattern with debug borders
     source_pattern: Option<SourcePattern>,
+
+    // Optional filename for text pattern
+    filename: Option<String>,
 }
 
 // Enum to represent different pattern types
@@ -51,6 +54,7 @@ struct ImageRenderer {
 enum PatternType {
     Checkerboard,
     Gradient,
+    Text,
 }
 
 impl ImageRenderer {
@@ -63,6 +67,7 @@ impl ImageRenderer {
             view_y: 0.0,
             pattern_type,
             source_pattern: None,
+            filename: None,
         };
 
         // Create the source pattern
@@ -87,6 +92,14 @@ impl ImageRenderer {
         self.generate_source_pattern();
     }
 
+    fn set_filename(&mut self, filename: Option<String>) {
+        self.filename = filename;
+        // If we're using the text pattern, regenerate it with the new filename
+        if let PatternType::Text = self.pattern_type {
+            self.generate_source_pattern();
+        }
+    }
+
     fn get_viewport_size(&self) -> (usize, usize) {
         let width = (self.source_width as f64 * self.zoom_level) as usize;
         let height = (self.source_height as f64 * self.zoom_level) as usize;
@@ -109,6 +122,7 @@ impl ImageRenderer {
             PatternType::Gradient => {
                 self.generate_gradient(&mut buffer, width, height, bytes_per_row)
             }
+            PatternType::Text => self.generate_text(&mut buffer, width, height, bytes_per_row),
         }
 
         // Add debug borders and corners
@@ -171,6 +185,115 @@ impl ImageRenderer {
                 buffer[idx + 1] = g; // Green
                 buffer[idx + 2] = b; // Blue
                 buffer[idx + 3] = 255; // Alpha
+            }
+        }
+    }
+
+    // Generate a text pattern
+    fn generate_text(
+        &self,
+        buffer: &mut Vec<u8>,
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+    ) {
+        // First, fill the entire buffer with a light gray background
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * bytes_per_row + x * 4;
+                buffer[idx] = 240; // Red
+                buffer[idx + 1] = 240; // Green
+                buffer[idx + 2] = 240; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
+        }
+
+        // The main text to display
+        let text = "Coming Soon";
+        let text_len = text.len();
+
+        // Simple ASCII font size and positions
+        let char_width = 20;
+        let char_height = 40;
+        let start_x = width / 2 - (text_len * char_width) / 2;
+        let start_y = height / 2 - char_height / 2;
+
+        // Draw the main text
+        for (i, c) in text.chars().enumerate() {
+            // Draw character at position
+            for dy in 0..char_height {
+                for dx in 0..char_width {
+                    let x = start_x + i * char_width + dx;
+                    let y = start_y + dy;
+
+                    // Skip if outside of bounds
+                    if x >= width || y >= height {
+                        continue;
+                    }
+
+                    let idx = y * bytes_per_row + x * 4;
+
+                    // Very simple "pixel font" - just draw a filled rectangle for each character
+                    // with a few pixels of spacing between characters
+                    if dx > 2 && dx < char_width - 3 && dy > 2 && dy < char_height - 3 {
+                        buffer[idx] = 30; // Red
+                        buffer[idx + 1] = 30; // Green
+                        buffer[idx + 2] = 160; // Blue (dark blue)
+                        buffer[idx + 3] = 255; // Alpha
+                    }
+                }
+            }
+        }
+
+        // If we have a filename, display it below the main text
+        if let Some(filename) = &self.filename {
+            // Display "Selected: " followed by the filename
+            let smaller_char_width = 12;
+            let smaller_char_height = 24;
+
+            let display_text = format!("Selected: {}", filename);
+
+            // Limit the length of the displayed filename
+            let display_text = if display_text.len() > 60 {
+                let mut s = display_text.chars().take(57).collect::<String>();
+                s.push_str("...");
+                s
+            } else {
+                display_text
+            };
+
+            let display_len = display_text.len();
+
+            let filename_x = width / 2 - (display_len * smaller_char_width) / 2;
+            let filename_y = start_y + char_height + 20; // Position below the main text
+
+            // Draw the filename text in a smaller font and different color
+            for (i, c) in display_text.chars().enumerate() {
+                for dy in 0..smaller_char_height {
+                    for dx in 0..smaller_char_width {
+                        let x = filename_x + i * smaller_char_width + dx;
+                        let y = filename_y + dy;
+
+                        // Skip if outside of bounds
+                        if x >= width || y >= height {
+                            continue;
+                        }
+
+                        let idx = y * bytes_per_row + x * 4;
+
+                        // Smaller font with different color (dark green)
+                        if dx > 1
+                            && dx < smaller_char_width - 2
+                            && dy > 1
+                            && dy < smaller_char_height - 2
+                        {
+                            buffer[idx] = 0; // Red
+                            buffer[idx + 1] = 100; // Green
+                            buffer[idx + 2] = 0; // Blue
+                            buffer[idx + 3] = 255; // Alpha
+                        }
+                    }
+                }
             }
         }
     }
@@ -556,29 +679,38 @@ define_class!(
                 if response == 1 {
                     let urls = panel.URLs();
                     if let Some(url) = urls.firstObject() {
+                        // Use the URL for debugging but don't try to extract filename directly
                         println!("DEBUG: Selected file: {:?}", url);
 
                         // Store the path
                         *self.ivars().selected_file_path.borrow_mut() = Some(url.clone());
 
+                        // For now, just extract a simple placeholder from the URL using debug output
+                        let url_debug = format!("{:?}", url);
+                        let filename = Some(format!("JP2 File"));
+
+                        // Show the "Coming Soon" text pattern since JP2 loading is not implemented yet
+                        println!("DEBUG: Showing Coming Soon text pattern for JP2 file");
+
                         // Check if we already have a renderer
                         let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
                         if need_new_renderer {
-                            // Create checkerboard pattern with renderer
+                            // Create text pattern with renderer
                             let width = 800;
                             let height = 600;
 
-                            let renderer = Arc::new(Mutex::new(
-                                ImageRenderer::new(PatternType::Checkerboard, width, height)
-                            ));
+                            let mut renderer = ImageRenderer::new(PatternType::Text, width, height);
+                            renderer.set_filename(filename);
 
+                            let renderer = Arc::new(Mutex::new(renderer));
                             *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
                         } else {
-                            // Update existing renderer to use checkerboard pattern
+                            // Update existing renderer to use text pattern
                             if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                                 let mut renderer_guard = renderer.lock().unwrap();
-                                renderer_guard.change_pattern_type(PatternType::Checkerboard);
+                                renderer_guard.change_pattern_type(PatternType::Text);
+                                renderer_guard.set_filename(filename);
                             }
                         }
 
@@ -593,7 +725,9 @@ define_class!(
                                 *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
                                 // Display the image
-                                let _: Bool = msg_send![self, handleDisplayImage];
+                                unsafe {
+                                    let _: Bool = msg_send![self, handleDisplayImage];
+                                }
                                 return Bool::YES;
                             }
                         }
@@ -643,8 +777,8 @@ define_class!(
                     // Display the image
                     unsafe {
                         let _: Bool = msg_send![self, handleDisplayImage];
-                        return Bool::YES;
                     }
+                    return Bool::YES;
                 }
             }
 
@@ -690,8 +824,8 @@ define_class!(
                     // Display the image
                     unsafe {
                         let _: Bool = msg_send![self, handleDisplayImage];
-                        return Bool::YES;
                     }
+                    return Bool::YES;
                 }
             }
 
