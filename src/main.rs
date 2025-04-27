@@ -21,11 +21,8 @@ use objc2_foundation::{
 //------------------------------------------------------------------------------
 // Bitmap Font Definition
 //------------------------------------------------------------------------------
-// A simple 5x5 pixel bitmap font for rendering text in the image viewer
-// Each character is represented as a 5x5 grid of binary pixels (0 = transparent, 1 = filled)
-// This allows rendering text without requiring system fonts or text rendering libraries
-
-/// Bitmap definitions for characters, each as a 5x5 pixel grid
+/// A simple 5x5 pixel bitmap font for rendering text in the image viewer
+/// Each character is represented as a 5x5 grid of binary pixels (0 = transparent, 1 = filled)
 /// The array contains 30 characters in the following order:
 /// C, O, M, I, N, G, S, P, J, 2, (space), F, L, E, D, T, A, R, B, 0-9, -, .
 const BITMAP_CHARS: [[[u8; 5]; 5]; 30] = [
@@ -272,7 +269,6 @@ const BITMAP_CHARS: [[[u8; 5]; 5]; 30] = [
 ];
 
 /// Mapping from characters to their index in the BITMAP_CHARS array
-/// This is used to quickly look up character bitmaps when rendering text
 /// Unknown characters will map to index 10 (space) as a fallback
 const CHAR_INDICES: [(char, usize); 30] = [
     ('C', 0),
@@ -319,22 +315,13 @@ struct SourcePattern {
 // Structure to hold rendering information
 #[derive(Debug)]
 struct ImageRenderer {
-    // Source image dimensions
     source_width: usize,
     source_height: usize,
-
-    // Current view information
     zoom_level: f64,
     view_x: f64,
     view_y: f64,
-
-    // Pattern type
     pattern_type: PatternType,
-
-    // Source pattern with debug borders
     source_pattern: Option<SourcePattern>,
-
-    // Text content for text pattern
     primary_text: Option<String>,
     secondary_text: Option<String>,
 }
@@ -361,9 +348,7 @@ impl ImageRenderer {
             secondary_text: None,
         };
 
-        // Create the source pattern
         renderer.generate_source_pattern();
-
         renderer
     }
 
@@ -376,17 +361,14 @@ impl ImageRenderer {
         self.view_y = y;
     }
 
-    // Change the pattern type while preserving other settings
     fn change_pattern_type(&mut self, pattern_type: PatternType) {
         self.pattern_type = pattern_type;
-        // Regenerate the source pattern with the new type
         self.generate_source_pattern();
     }
 
     fn set_text(&mut self, primary: Option<String>, secondary: Option<String>) {
         self.primary_text = primary;
         self.secondary_text = secondary;
-        // If we're using the text pattern, regenerate it with the new text
         if let PatternType::Text = self.pattern_type {
             self.generate_source_pattern();
         }
@@ -398,15 +380,14 @@ impl ImageRenderer {
         (width, height)
     }
 
-    // Generate the source pattern with borders
     fn generate_source_pattern(&mut self) {
         let width = self.source_width;
         let height = self.source_height;
-        let bytes_per_row = width * 4; // RGBA format
+        // Using RGBA format with 4 bytes per pixel (red, green, blue, alpha)
+        let bytes_per_row = width * 4;
         let buffer_size = bytes_per_row * height;
         let mut buffer = vec![0; buffer_size];
 
-        // Generate the base pattern
         match self.pattern_type {
             PatternType::Checkerboard => {
                 self.generate_checkerboard(&mut buffer, width, height, bytes_per_row)
@@ -417,10 +398,8 @@ impl ImageRenderer {
             PatternType::Text => self.generate_text(&mut buffer, width, height, bytes_per_row),
         }
 
-        // Add debug borders and corners
         self.add_debug_borders(&mut buffer, width, height, bytes_per_row);
 
-        // Store the pattern
         self.source_pattern = Some(SourcePattern {
             buffer,
             width,
@@ -437,21 +416,18 @@ impl ImageRenderer {
         height: usize,
         bytes_per_row: usize,
     ) {
-        let square_size = 20; // Size of each checkerboard square
+        let square_size = 20;
 
         for y in 0..height {
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-
-                // Determine if this pixel should be black or white
                 let is_white = ((x / square_size) + (y / square_size)) % 2 == 0;
-
                 let color = if is_white { 255u8 } else { 0u8 };
 
-                buffer[idx] = color; // Red
-                buffer[idx + 1] = color; // Green
-                buffer[idx + 2] = color; // Blue
-                buffer[idx + 3] = 255; // Alpha
+                buffer[idx] = color;
+                buffer[idx + 1] = color;
+                buffer[idx + 2] = color;
+                buffer[idx + 3] = 255;
             }
         }
     }
@@ -467,16 +443,14 @@ impl ImageRenderer {
         for y in 0..height {
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-
-                // Create a blue to white gradient
                 let r = ((x as f64) / (width as f64) * 255.0) as u8;
                 let g = ((y as f64) / (height as f64) * 255.0) as u8;
                 let b = 200u8;
 
-                buffer[idx] = r; // Red
-                buffer[idx + 1] = g; // Green
-                buffer[idx + 2] = b; // Blue
-                buffer[idx + 3] = 255; // Alpha
+                buffer[idx] = r;
+                buffer[idx + 1] = g;
+                buffer[idx + 2] = b;
+                buffer[idx + 3] = 255;
             }
         }
     }
@@ -489,35 +463,32 @@ impl ImageRenderer {
         height: usize,
         bytes_per_row: usize,
     ) {
-        // First, fill the entire buffer with a light blue-gray background
+        // Fill with light blue-gray background
         for y in 0..height {
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = 230; // Red
-                buffer[idx + 1] = 235; // Green
-                buffer[idx + 2] = 240; // Blue
-                buffer[idx + 3] = 255; // Alpha
+                buffer[idx] = 230;
+                buffer[idx + 1] = 235;
+                buffer[idx + 2] = 240;
+                buffer[idx + 3] = 255;
             }
         }
 
-        // Map characters to their index
         let char_map: std::collections::HashMap<char, usize> =
             CHAR_INDICES.iter().cloned().collect();
 
-        // The primary text to display (default to "COMING SOON")
         let primary = self.primary_text.as_deref().unwrap_or("COMING SOON");
 
-        // Simple sizes and positions
+        // Text sizing and positioning
         let char_width = 32;
         let char_height = 40;
         let char_padding = 4;
 
-        // Calculate centered positions
         let text_width = primary.len() * (char_width + char_padding);
         let start_x = (width - text_width) / 2;
         let start_y = height / 2 - char_height;
 
-        // Draw the primary text
+        // Draw primary text
         self.draw_text(
             buffer,
             width,
@@ -531,17 +502,17 @@ impl ImageRenderer {
             char_width,
             char_height,
             char_padding,
-            [30, 30, 180],
-        ); // Dark blue color
+            [30, 30, 180], // Dark blue
+        );
 
-        // Draw secondary text if available (like filename)
+        // Draw secondary text if available
         if let Some(secondary) = &self.secondary_text {
             let secondary_text = secondary;
             let smaller_char_width = 16;
             let smaller_char_height = 20;
             let smaller_padding = 2;
 
-            // Limit the secondary text length if needed
+            // Limit text length if needed
             let display_text = if secondary_text.len() > 30 {
                 format!("{}...", &secondary_text[0..27])
             } else {
@@ -550,7 +521,7 @@ impl ImageRenderer {
 
             let secondary_text_width = display_text.len() * (smaller_char_width + smaller_padding);
             let secondary_x = (width - secondary_text_width) / 2;
-            let secondary_y = start_y + char_height + 40; // Below the primary text
+            let secondary_y = start_y + char_height + 40; // Below primary text
 
             self.draw_text(
                 buffer,
@@ -565,11 +536,11 @@ impl ImageRenderer {
                 smaller_char_width,
                 smaller_char_height,
                 smaller_padding,
-                [20, 120, 20],
-            ); // Dark green color
+                [20, 120, 20], // Dark green
+            );
         }
 
-        // Add "FILE SELECTED" text at the bottom if there's a secondary text
+        // Add "FILE SELECTED" text if there's a secondary text
         if self.secondary_text.is_some() {
             let info_text = "FILE SELECTED";
             let small_char_width = 12;
@@ -593,8 +564,8 @@ impl ImageRenderer {
                 small_char_width,
                 small_char_height,
                 small_padding,
-                [150, 50, 50],
-            ); // Red color
+                [150, 50, 50], // Red
+            );
         }
     }
 
@@ -615,41 +586,33 @@ impl ImageRenderer {
         char_padding: usize,
         color: [u8; 3],
     ) {
-        // Scale factors to expand the 5x5 bitmap to the desired character size
+        // Scale factors to expand the 5x5 bitmap
         let scale_x = char_width / 5;
         let scale_y = char_height / 5;
 
-        // Render each character in the text
         for (i, c) in text.chars().enumerate() {
-            // Get character bitmap or use space for unknown characters
-            let char_idx = char_map.get(&c).copied().unwrap_or(10); // Default to space (index 10)
+            let char_idx = char_map.get(&c).copied().unwrap_or(10); // Default to space
             let bitmap = &characters[char_idx];
-
-            // Calculate position for this character
             let char_x = start_x + i * (char_width + char_padding);
 
-            // Draw the character by scaling up the 5x5 bitmap
             for (y_idx, row) in bitmap.iter().enumerate() {
                 for (x_idx, &pixel) in row.iter().enumerate() {
                     if pixel == 1 {
-                        // For each pixel that's set in the bitmap, draw a scaled rectangle
                         for sy in 0..scale_y {
                             for sx in 0..scale_x {
                                 let x = char_x + x_idx * scale_x + sx;
                                 let y = start_y + y_idx * scale_y + sy;
 
-                                // Skip if outside buffer bounds
                                 if x >= width || y >= height {
                                     continue;
                                 }
 
-                                // Set the pixel color
                                 let idx = y * bytes_per_row + x * 4;
                                 if idx + 3 < buffer.len() {
-                                    buffer[idx] = color[0]; // Red
-                                    buffer[idx + 1] = color[1]; // Green
-                                    buffer[idx + 2] = color[2]; // Blue
-                                    buffer[idx + 3] = 255; // Alpha (fully opaque)
+                                    buffer[idx] = color[0];
+                                    buffer[idx + 1] = color[1];
+                                    buffer[idx + 2] = color[2];
+                                    buffer[idx + 3] = 255;
                                 }
                             }
                         }
@@ -667,64 +630,63 @@ impl ImageRenderer {
         height: usize,
         bytes_per_row: usize,
     ) {
-        // Configuration
         let border_thickness = 3;
         let corner_size = 15;
 
-        // Color definitions
-        let red = [255u8, 0, 0, 255]; // For borders and top-left corner
-        let green = [0u8, 255, 0, 255]; // For top-right corner
-        let blue = [0u8, 0, 255, 255]; // For bottom-left corner
-        let yellow = [255u8, 255, 0, 255]; // For bottom-right corner
+        // Color definitions for borders and corner markers
+        let red = [255u8, 0, 0, 255];
+        let green = [0u8, 255, 0, 255];
+        let blue = [0u8, 0, 255, 255];
+        let yellow = [255u8, 255, 0, 255];
 
-        // Draw border - top and bottom edges
+        // Draw top and bottom borders
         for y in 0..border_thickness {
             // Top edge
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = red[0]; // Red
-                buffer[idx + 1] = red[1]; // Green
-                buffer[idx + 2] = red[2]; // Blue
-                buffer[idx + 3] = red[3]; // Alpha
+                buffer[idx] = red[0];
+                buffer[idx + 1] = red[1];
+                buffer[idx + 2] = red[2];
+                buffer[idx + 3] = red[3];
             }
 
             // Bottom edge
             if height > border_thickness {
                 for x in 0..width {
                     let idx = (height - 1 - y) * bytes_per_row + x * 4;
-                    buffer[idx] = red[0]; // Red
-                    buffer[idx + 1] = red[1]; // Green
-                    buffer[idx + 2] = red[2]; // Blue
-                    buffer[idx + 3] = red[3]; // Alpha
+                    buffer[idx] = red[0];
+                    buffer[idx + 1] = red[1];
+                    buffer[idx + 2] = red[2];
+                    buffer[idx + 3] = red[3];
                 }
             }
         }
 
-        // Draw border - left and right edges
+        // Draw left and right borders
         for x in 0..border_thickness {
             // Left edge
             for y in 0..height {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = red[0]; // Red
-                buffer[idx + 1] = red[1]; // Green
-                buffer[idx + 2] = red[2]; // Blue
-                buffer[idx + 3] = red[3]; // Alpha
+                buffer[idx] = red[0];
+                buffer[idx + 1] = red[1];
+                buffer[idx + 2] = red[2];
+                buffer[idx + 3] = red[3];
             }
 
             // Right edge
             if width > border_thickness {
                 for y in 0..height {
                     let idx = y * bytes_per_row + (width - 1 - x) * 4;
-                    buffer[idx] = red[0]; // Red
-                    buffer[idx + 1] = red[1]; // Green
-                    buffer[idx + 2] = red[2]; // Blue
-                    buffer[idx + 3] = red[3]; // Alpha
+                    buffer[idx] = red[0];
+                    buffer[idx + 1] = red[1];
+                    buffer[idx + 2] = red[2];
+                    buffer[idx + 3] = red[3];
                 }
             }
         }
 
-        // Draw colored corner boxes for easy orientation
-        self.draw_corner_box(buffer, bytes_per_row, 0, 0, corner_size, red); // Top-left (red)
+        // Draw colored corner boxes
+        self.draw_corner_box(buffer, bytes_per_row, 0, 0, corner_size, red);
 
         if width > corner_size {
             self.draw_corner_box(
@@ -734,7 +696,7 @@ impl ImageRenderer {
                 0,
                 corner_size,
                 green,
-            ); // Top-right (green)
+            );
         }
 
         if height > corner_size {
@@ -745,7 +707,7 @@ impl ImageRenderer {
                 height - corner_size,
                 corner_size,
                 blue,
-            ); // Bottom-left (blue)
+            );
         }
 
         if width > corner_size && height > corner_size {
@@ -756,11 +718,10 @@ impl ImageRenderer {
                 height - corner_size,
                 corner_size,
                 yellow,
-            ); // Bottom-right (yellow)
+            );
         }
     }
 
-    // Helper method to draw a corner box
     fn draw_corner_box(
         &self,
         buffer: &mut Vec<u8>,
@@ -774,10 +735,10 @@ impl ImageRenderer {
             for x in 0..size {
                 let idx = (start_y + y) * bytes_per_row + (start_x + x) * 4;
                 if idx + 3 < buffer.len() {
-                    buffer[idx] = color[0]; // Red
-                    buffer[idx + 1] = color[1]; // Green
-                    buffer[idx + 2] = color[2]; // Blue
-                    buffer[idx + 3] = color[3]; // Alpha
+                    buffer[idx] = color[0];
+                    buffer[idx + 1] = color[1];
+                    buffer[idx + 2] = color[2];
+                    buffer[idx + 3] = color[3];
                 }
             }
         }
@@ -791,11 +752,11 @@ impl ImageRenderer {
         let alloc = NSImage::alloc();
         let image = unsafe { NSImage::initWithSize(alloc, size) };
 
-        // Create a bitmap representation for the viewport
+        // Create a bitmap representation
         let alloc = NSBitmapImageRep::alloc();
         let color_space_name = ns_string!("NSDeviceRGBColorSpace");
         let bits_per_component = 8;
-        let bytes_per_row = viewport_width * 4; // RGBA format
+        let bytes_per_row = viewport_width * 4;
 
         let rep = unsafe {
             let planes: *const *mut u8 = std::ptr::null();
@@ -826,7 +787,6 @@ impl ImageRenderer {
         // Apply zooming and panning
         if let Some(source) = &self.source_pattern {
             unsafe {
-                // Calculate scaling factor and starting position
                 let scale_factor = 1.0 / self.zoom_level;
                 let start_src_x = (self.view_x * scale_factor) as usize;
                 let start_src_y = (self.view_y * scale_factor) as usize;
@@ -835,30 +795,27 @@ impl ImageRenderer {
                     for x in 0..viewport_width {
                         let dst_idx = (y * bytes_per_row + x * 4) as isize;
 
-                        // Map viewport position to source pattern coordinates
+                        // Map viewport position to source coordinates
                         let src_x = start_src_x + (x as f64 * scale_factor) as usize;
                         let src_y = start_src_y + (y as f64 * scale_factor) as usize;
 
-                        // Clamp source coordinates to valid range
+                        // Clamp to valid range
                         let src_x_clamped = src_x.min(source.width - 1);
                         let src_y_clamped = src_y.min(source.height - 1);
 
-                        // Calculate source index
                         let src_idx = src_y_clamped * source.bytes_per_row + src_x_clamped * 4;
 
-                        // Copy pixel from source to destination
                         if src_idx + 3 < source.buffer.len() {
-                            *buffer.offset(dst_idx) = source.buffer[src_idx]; // Red
-                            *buffer.offset(dst_idx + 1) = source.buffer[src_idx + 1]; // Green
-                            *buffer.offset(dst_idx + 2) = source.buffer[src_idx + 2]; // Blue
+                            *buffer.offset(dst_idx) = source.buffer[src_idx];
+                            *buffer.offset(dst_idx + 1) = source.buffer[src_idx + 1];
+                            *buffer.offset(dst_idx + 2) = source.buffer[src_idx + 2];
                             *buffer.offset(dst_idx + 3) = source.buffer[src_idx + 3];
-                        // Alpha
                         } else {
-                            // If out of bounds, set to a distinctive color (purple)
-                            *buffer.offset(dst_idx) = 128; // Red
-                            *buffer.offset(dst_idx + 1) = 0; // Green
-                            *buffer.offset(dst_idx + 2) = 128; // Blue
-                            *buffer.offset(dst_idx + 3) = 255; // Alpha
+                            // Out of bounds - use purple
+                            *buffer.offset(dst_idx) = 128;
+                            *buffer.offset(dst_idx + 1) = 0;
+                            *buffer.offset(dst_idx + 2) = 128;
+                            *buffer.offset(dst_idx + 3) = 255;
                         }
                     }
                 }
@@ -872,7 +829,7 @@ impl ImageRenderer {
     }
 }
 
-// Define a custom image view subclass that forwards mouse events to our app delegate
+// Custom image view that forwards mouse events to our app delegate
 define_class!(
     #[unsafe(super = NSImageView)]
     #[thread_kind = MainThreadOnly]
@@ -885,14 +842,12 @@ define_class!(
     impl CustomImageView {
         #[unsafe(method(mouseDown:))]
         fn mouseDown(&self, event: &NSEvent) {
-            // Pass the event to the app delegate
             if let Some(delegate) = self.get_app_delegate() {
                 unsafe {
                     let _: Bool = msg_send![delegate, mouseDown: event];
                 }
             }
 
-            // Call super implementation
             unsafe {
                 let _: () = msg_send![super(self), mouseDown: event];
             }
@@ -900,14 +855,12 @@ define_class!(
 
         #[unsafe(method(mouseDragged:))]
         fn mouseDragged(&self, event: &NSEvent) {
-            // Pass the event to the app delegate
             if let Some(delegate) = self.get_app_delegate() {
                 unsafe {
                     let _: Bool = msg_send![delegate, mouseDragged: event];
                 }
             }
 
-            // Call super implementation
             unsafe {
                 let _: () = msg_send![super(self), mouseDragged: event];
             }
@@ -915,14 +868,12 @@ define_class!(
 
         #[unsafe(method(mouseUp:))]
         fn mouseUp(&self, event: &NSEvent) {
-            // Pass the event to the app delegate
             if let Some(delegate) = self.get_app_delegate() {
                 unsafe {
                     let _: Bool = msg_send![delegate, mouseUp: event];
                 }
             }
 
-            // Call super implementation
             unsafe {
                 let _: () = msg_send![super(self), mouseUp: event];
             }
@@ -969,9 +920,6 @@ struct AppDelegateIvars {
 }
 
 define_class!(
-    // SAFETY:
-    // - The superclass NSObject does not have any subclassing requirements.
-    // - `AppDelegate` does not implement `Drop`.
     #[unsafe(super = NSObject)]
     #[thread_kind = MainThreadOnly]
     #[name = "AppDelegate"]
@@ -987,31 +935,20 @@ define_class!(
 
             let mtm = self.mtm();
 
-            // Create a window
             let window = self.create_window(mtm);
             let _ = self.ivars().window.set(window.clone());
 
-            // Set up the window
             window.setTitle(ns_string!("JP2 Viewer"));
             window.center();
 
-            // Create scroll view and image view
             self.setup_image_view(&window, mtm);
-
-            // Create zoom controls
             self.setup_zoom_controls(&window, mtm);
-
-            // Add buttons
             self.add_buttons(&window, mtm);
-
-            // Set up mouse event handling
             self.setup_mouse_handling(&window);
 
-            // Activate the application first to ensure it's frontmost
+            // Activate app and make window visible
             let app = NSApplication::sharedApplication(mtm);
             unsafe { app.activate() };
-
-            // Then make window key and visible
             window.makeKeyAndOrderFront(None);
         }
     }
@@ -1019,7 +956,6 @@ define_class!(
     unsafe impl NSWindowDelegate for AppDelegate {
         #[unsafe(method(windowWillClose:))]
         fn windowWillClose(&self, _notification: &NSNotification) {
-            // Quit the application when the window is closed
             let mtm = self.mtm();
             let app = NSApplication::sharedApplication(mtm);
             unsafe { app.terminate(None) };
@@ -1040,33 +976,25 @@ define_class!(
                 panel.setCanChooseDirectories(false);
                 panel.setAllowsMultipleSelection(false);
 
-                // Set up allowed file types
                 let types = NSArray::from_slice(&[ns_string!("jp2")]);
                 panel.setAllowedFileTypes(Some(&types));
 
-                // Show the panel
                 let response = panel.runModal();
 
-                // Check response (1 = NSModalResponseOK)
                 if response == 1 {
                     let urls = panel.URLs();
                     if let Some(url) = urls.firstObject() {
-                        // Use the URL for debugging but don't try to extract filename directly
                         println!("DEBUG: Selected file: {:?}", url);
 
-                        // Store the path
                         *self.ivars().selected_file_path.borrow_mut() = Some(url.clone());
 
-                        // Extract the actual filename from the URL
+                        // Extract filename from URL
                         let filename = {
-                            // Log the raw URL for debugging
                             println!("DEBUG: Raw URL: {:?}", url);
 
-                            // Get URL string from NSURLs path() method which is safer than debug formatting
                             let url_path = {
                                 if let Some(path) = url.path().as_deref() {
                                     let ns_string = path.to_owned();
-                                    // Convert NSString to Rust String - use display instead of debug
                                     format!("{}", &*ns_string)
                                 } else {
                                     "unknown_path".to_string()
@@ -1075,7 +1003,6 @@ define_class!(
 
                             println!("DEBUG: Extracted path: {}", url_path);
 
-                            // Extract just the filename portion
                             let filename = url_path.split('/').last()
                                 .unwrap_or("JP2 File")
                                 .to_string();
@@ -1084,14 +1011,11 @@ define_class!(
                             Some(filename)
                         };
 
-                        // Show the "Coming Soon" text pattern since JP2 loading is not implemented yet
                         println!("DEBUG: Showing Coming Soon text pattern for JP2 file: {:?}", filename);
 
-                        // Check if we already have a renderer
                         let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
                         if need_new_renderer {
-                            // Create text pattern with renderer
                             let width = 800;
                             let height = 600;
 
@@ -1101,7 +1025,6 @@ define_class!(
                             let renderer = Arc::new(Mutex::new(renderer));
                             *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
                         } else {
-                            // Update existing renderer to use text pattern
                             if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                                 let mut renderer_guard = renderer.lock().unwrap();
                                 renderer_guard.change_pattern_type(PatternType::Text);
@@ -1109,7 +1032,6 @@ define_class!(
                             }
                         }
 
-                        // Render the image with the current renderer
                         if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                             let image = {
                                 let renderer_guard = renderer.lock().unwrap();
@@ -1119,7 +1041,6 @@ define_class!(
                             if let Some(image) = image {
                                 *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                                // Display the image
                                 unsafe {
                                     let _: Bool = msg_send![self, handleDisplayImage];
                                 }
@@ -1137,11 +1058,9 @@ define_class!(
         fn createGradient(&self, _sender: Option<&NSObject>) -> Bool {
             println!("DEBUG: Creating gradient image");
 
-            // Check if we already have a renderer
             let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
             if need_new_renderer {
-                // Create a new gradient image with renderer
                 let width = 800;
                 let height = 600;
 
@@ -1151,14 +1070,12 @@ define_class!(
 
                 *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
             } else {
-                // Update existing renderer to use gradient pattern
                 if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                     let mut renderer_guard = renderer.lock().unwrap();
                     renderer_guard.change_pattern_type(PatternType::Gradient);
                 }
             }
 
-            // Render the image with the current renderer
             if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                 let image = {
                     let renderer_guard = renderer.lock().unwrap();
@@ -1166,10 +1083,8 @@ define_class!(
                 };
 
                 if let Some(image) = image {
-                    // Store the image in the delegate
                     *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                    // Display the image
                     unsafe {
                         let _: Bool = msg_send![self, handleDisplayImage];
                     }
@@ -1184,11 +1099,9 @@ define_class!(
         fn createCheckerboard(&self, _sender: Option<&NSObject>) -> Bool {
             println!("DEBUG: Creating checkerboard image");
 
-            // Check if we already have a renderer
             let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
             if need_new_renderer {
-                // Create a new checkerboard image with renderer
                 let width = 800;
                 let height = 600;
 
@@ -1198,14 +1111,12 @@ define_class!(
 
                 *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
             } else {
-                // Update existing renderer to use checkerboard pattern
                 if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                     let mut renderer_guard = renderer.lock().unwrap();
                     renderer_guard.change_pattern_type(PatternType::Checkerboard);
                 }
             }
 
-            // Render the image with the current renderer
             if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                 let image = {
                     let renderer_guard = renderer.lock().unwrap();
@@ -1213,10 +1124,8 @@ define_class!(
                 };
 
                 if let Some(image) = image {
-                    // Store the image in the delegate
                     *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                    // Display the image
                     unsafe {
                         let _: Bool = msg_send![self, handleDisplayImage];
                     }
@@ -1249,16 +1158,13 @@ define_class!(
             };
 
             unsafe {
-                // Set the image
                 image_view.setImage(Some(image));
 
-                // Update image view size to match the image size
                 let image_size = image.size();
                 let frame = NSRect::new(NSPoint::new(0.0, 0.0), image_size);
                 image_view.setFrame(frame);
             }
 
-            // Adjust scroll view content size
             if let Some(scroll_view) = self.ivars().scroll_view.get() {
                 unsafe {
                     scroll_view.documentView().unwrap().setFrame(image_view.frame());
@@ -1277,13 +1183,11 @@ define_class!(
                 println!("DEBUG: Zoom changed to {}", slider_value);
 
                 if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
-                    // Update zoom level in renderer
                     {
                         let mut renderer_guard = renderer.lock().unwrap();
                         renderer_guard.set_zoom(slider_value);
                     }
 
-                    // Re-render the image with new zoom
                     let image = {
                         let renderer_guard = renderer.lock().unwrap();
                         renderer_guard.render()
@@ -1292,7 +1196,6 @@ define_class!(
                     if let Some(image) = image {
                         *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                        // Update the display
                         unsafe {
                             let _: Bool = msg_send![self, handleDisplayImage];
                         }
@@ -1307,10 +1210,8 @@ define_class!(
         #[unsafe(method(mouseDown:))]
         fn mouseDown(&self, event: &NSEvent) -> Bool {
             println!("DEBUG: Mouse down received");
-            // Start panning mode
             *self.ivars().is_panning.borrow_mut() = true;
 
-            // Store initial mouse location
             let location = unsafe { event.locationInWindow() };
             *self.ivars().last_mouse_location.borrow_mut() = location;
 
@@ -1324,11 +1225,9 @@ define_class!(
                 let current_location = unsafe { event.locationInWindow() };
                 let last_location = *self.ivars().last_mouse_location.borrow();
 
-                // Calculate the delta in screen coordinates
                 let delta_x = current_location.x - last_location.x;
                 let delta_y = current_location.y - last_location.y;
 
-                // Update renderer view position
                 if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                     {
                         let mut renderer_guard = renderer.lock().unwrap();
@@ -1341,7 +1240,6 @@ define_class!(
                         );
                     }
 
-                    // Re-render with new view position
                     let image = {
                         let renderer_guard = renderer.lock().unwrap();
                         renderer_guard.render()
@@ -1350,14 +1248,12 @@ define_class!(
                     if let Some(image) = image {
                         *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
 
-                        // Update the display
                         unsafe {
                             let _: Bool = msg_send![self, handleDisplayImage];
                         }
                     }
                 }
 
-                // Update the last location
                 *self.ivars().last_mouse_location.borrow_mut() = current_location;
                 return Bool::YES;
             }
@@ -1368,7 +1264,6 @@ define_class!(
         #[unsafe(method(mouseUp:))]
         fn mouseUp(&self, _event: &NSEvent) -> Bool {
             println!("DEBUG: Mouse up received");
-            // End panning mode
             *self.ivars().is_panning.borrow_mut() = false;
             Bool::YES
         }
