@@ -2,6 +2,8 @@
 
 A simple macOS application for viewing JP2 image files (work in progress).
 
+![screenshot](./screenshot.png)
+
 ## Current Features
 - File selection dialog for JP2 files
 - Placeholder image generation (text, gradient, checkerboard)
