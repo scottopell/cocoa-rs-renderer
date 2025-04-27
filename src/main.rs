@@ -45,8 +45,9 @@ struct ImageRenderer {
     // Source pattern with debug borders
     source_pattern: Option<SourcePattern>,
 
-    // Optional filename for text pattern
-    filename: Option<String>,
+    // Text content for text pattern
+    primary_text: Option<String>,
+    secondary_text: Option<String>,
 }
 
 // Enum to represent different pattern types
@@ -67,7 +68,8 @@ impl ImageRenderer {
             view_y: 0.0,
             pattern_type,
             source_pattern: None,
-            filename: None,
+            primary_text: None,
+            secondary_text: None,
         };
 
         // Create the source pattern
@@ -92,9 +94,10 @@ impl ImageRenderer {
         self.generate_source_pattern();
     }
 
-    fn set_filename(&mut self, filename: Option<String>) {
-        self.filename = filename;
-        // If we're using the text pattern, regenerate it with the new filename
+    fn set_text(&mut self, primary: Option<String>, secondary: Option<String>) {
+        self.primary_text = primary;
+        self.secondary_text = secondary;
+        // If we're using the text pattern, regenerate it with the new text
         if let PatternType::Text = self.pattern_type {
             self.generate_source_pattern();
         }
@@ -189,7 +192,7 @@ impl ImageRenderer {
         }
     }
 
-    // Generate a text pattern
+    // Generate a text pattern with improved rendering
     fn generate_text(
         &self,
         buffer: &mut Vec<u8>,
@@ -197,100 +200,300 @@ impl ImageRenderer {
         height: usize,
         bytes_per_row: usize,
     ) {
-        // First, fill the entire buffer with a light gray background
+        // First, fill the entire buffer with a light blue-gray background
         for y in 0..height {
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = 240; // Red
-                buffer[idx + 1] = 240; // Green
+                buffer[idx] = 230; // Red
+                buffer[idx + 1] = 235; // Green
                 buffer[idx + 2] = 240; // Blue
                 buffer[idx + 3] = 255; // Alpha
             }
         }
 
-        // The main text to display
-        let text = "Coming Soon";
-        let text_len = text.len();
+        // Characters we can draw (basic ASCII representation)
+        let characters = [
+            // C
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 1, 1, 1, 0],
+            ],
+            // O
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // M
+            [
+                [1, 0, 0, 0, 1],
+                [1, 1, 0, 1, 1],
+                [1, 0, 1, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+            ],
+            // I
+            [
+                [0, 1, 1, 1, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 1, 1, 1, 0],
+            ],
+            // N
+            [
+                [1, 0, 0, 0, 1],
+                [1, 1, 0, 0, 1],
+                [1, 0, 1, 0, 1],
+                [1, 0, 0, 1, 1],
+                [1, 0, 0, 0, 1],
+            ],
+            // G
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // S
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [0, 1, 1, 1, 0],
+                [0, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // P
+            [
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+            ],
+            // J
+            [
+                [0, 0, 1, 1, 0],
+                [0, 0, 0, 1, 0],
+                [0, 0, 0, 1, 0],
+                [1, 0, 0, 1, 0],
+                [0, 1, 1, 0, 0],
+            ],
+            // 2
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 0, 1, 1, 0],
+                [0, 1, 0, 0, 0],
+                [1, 1, 1, 1, 1],
+            ],
+            // SPACE
+            [
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+            ],
+            // F
+            [
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+            ],
+            // L
+            [
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1],
+            ],
+            // E
+            [
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1],
+            ],
+        ];
 
-        // Simple ASCII font size and positions
-        let char_width = 20;
+        // Map characters to their index
+        let char_map: std::collections::HashMap<char, usize> = [
+            ('C', 0),
+            ('O', 1),
+            ('M', 2),
+            ('I', 3),
+            ('N', 4),
+            ('G', 5),
+            ('S', 6),
+            ('P', 7),
+            ('J', 8),
+            ('2', 9),
+            (' ', 10),
+            ('F', 11),
+            ('L', 12),
+            ('E', 13),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        // The primary text to display (default to "COMING SOON")
+        let primary = self.primary_text.as_deref().unwrap_or("COMING SOON");
+
+        // Simple sizes and positions
+        let char_width = 32;
         let char_height = 40;
-        let start_x = width / 2 - (text_len * char_width) / 2;
-        let start_y = height / 2 - char_height / 2;
+        let char_padding = 4;
 
-        // Draw the main text
-        for (i, c) in text.chars().enumerate() {
-            // Draw character at position
-            for dy in 0..char_height {
-                for dx in 0..char_width {
-                    let x = start_x + i * char_width + dx;
-                    let y = start_y + dy;
+        // Calculate centered positions
+        let text_width = primary.len() * (char_width + char_padding);
+        let start_x = (width - text_width) / 2;
+        let start_y = height / 2 - char_height;
 
-                    // Skip if outside of bounds
-                    if x >= width || y >= height {
-                        continue;
-                    }
+        // Draw the primary text
+        self.draw_text(
+            buffer,
+            width,
+            height,
+            bytes_per_row,
+            &characters,
+            &char_map,
+            primary,
+            start_x,
+            start_y,
+            char_width,
+            char_height,
+            char_padding,
+            [30, 30, 180],
+        ); // Dark blue color
 
-                    let idx = y * bytes_per_row + x * 4;
+        // Draw secondary text if available (like filename)
+        if let Some(secondary) = &self.secondary_text {
+            let secondary_text = secondary;
+            let smaller_char_width = 16;
+            let smaller_char_height = 20;
+            let smaller_padding = 2;
 
-                    // Very simple "pixel font" - just draw a filled rectangle for each character
-                    // with a few pixels of spacing between characters
-                    if dx > 2 && dx < char_width - 3 && dy > 2 && dy < char_height - 3 {
-                        buffer[idx] = 30; // Red
-                        buffer[idx + 1] = 30; // Green
-                        buffer[idx + 2] = 160; // Blue (dark blue)
-                        buffer[idx + 3] = 255; // Alpha
-                    }
-                }
-            }
-        }
-
-        // If we have a filename, display it below the main text
-        if let Some(filename) = &self.filename {
-            // Display "Selected: " followed by the filename
-            let smaller_char_width = 12;
-            let smaller_char_height = 24;
-
-            let display_text = format!("Selected: {}", filename);
-
-            // Limit the length of the displayed filename
-            let display_text = if display_text.len() > 60 {
-                let mut s = display_text.chars().take(57).collect::<String>();
-                s.push_str("...");
-                s
+            // Limit the secondary text length if needed
+            let display_text = if secondary_text.len() > 30 {
+                format!("{:.27}...", secondary_text)
             } else {
-                display_text
+                secondary_text.to_string()
             };
 
-            let display_len = display_text.len();
+            let secondary_text_width = display_text.len() * (smaller_char_width + smaller_padding);
+            let secondary_x = (width - secondary_text_width) / 2;
+            let secondary_y = start_y + char_height + 40; // Below the primary text
 
-            let filename_x = width / 2 - (display_len * smaller_char_width) / 2;
-            let filename_y = start_y + char_height + 20; // Position below the main text
+            self.draw_text(
+                buffer,
+                width,
+                height,
+                bytes_per_row,
+                &characters,
+                &char_map,
+                &display_text.to_uppercase(),
+                secondary_x,
+                secondary_y,
+                smaller_char_width,
+                smaller_char_height,
+                smaller_padding,
+                [20, 120, 20],
+            ); // Dark green color
+        }
 
-            // Draw the filename text in a smaller font and different color
-            for (i, c) in display_text.chars().enumerate() {
-                for dy in 0..smaller_char_height {
-                    for dx in 0..smaller_char_width {
-                        let x = filename_x + i * smaller_char_width + dx;
-                        let y = filename_y + dy;
+        // Add "FILE SELECTED" text at the bottom if there's a secondary text
+        if self.secondary_text.is_some() {
+            let info_text = "FILE SELECTED";
+            let small_char_width = 12;
+            let small_char_height = 15;
+            let small_padding = 1;
 
-                        // Skip if outside of bounds
-                        if x >= width || y >= height {
-                            continue;
-                        }
+            let info_text_width = info_text.len() * (small_char_width + small_padding);
+            let info_x = (width - info_text_width) / 2;
+            let info_y = height - 60; // Near bottom
 
-                        let idx = y * bytes_per_row + x * 4;
+            self.draw_text(
+                buffer,
+                width,
+                height,
+                bytes_per_row,
+                &characters,
+                &char_map,
+                info_text,
+                info_x,
+                info_y,
+                small_char_width,
+                small_char_height,
+                small_padding,
+                [150, 50, 50],
+            ); // Red color
+        }
+    }
 
-                        // Smaller font with different color (dark green)
-                        if dx > 1
-                            && dx < smaller_char_width - 2
-                            && dy > 1
-                            && dy < smaller_char_height - 2
-                        {
-                            buffer[idx] = 0; // Red
-                            buffer[idx + 1] = 100; // Green
-                            buffer[idx + 2] = 0; // Blue
-                            buffer[idx + 3] = 255; // Alpha
+    // Helper to draw text with the bitmap font
+    fn draw_text(
+        &self,
+        buffer: &mut Vec<u8>,
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+        characters: &[[[u8; 5]; 5]],
+        char_map: &std::collections::HashMap<char, usize>,
+        text: &str,
+        start_x: usize,
+        start_y: usize,
+        char_width: usize,
+        char_height: usize,
+        char_padding: usize,
+        color: [u8; 3],
+    ) {
+        for (i, c) in text.chars().enumerate() {
+            // Get character bitmap or use space for unknown characters
+            let char_idx = char_map.get(&c).copied().unwrap_or(10); // Default to space
+            let bitmap = &characters[char_idx];
+
+            // Character position
+            let char_x = start_x + i * (char_width + char_padding);
+
+            // Scale the 5x5 bitmap to the desired size
+            let scale_x = char_width / 5;
+            let scale_y = char_height / 5;
+
+            // Draw the character
+            for (y_idx, row) in bitmap.iter().enumerate() {
+                for (x_idx, &pixel) in row.iter().enumerate() {
+                    if pixel == 1 {
+                        // Fill the scaled pixel area
+                        for sy in 0..scale_y {
+                            for sx in 0..scale_x {
+                                let x = char_x + x_idx * scale_x + sx;
+                                let y = start_y + y_idx * scale_y + sy;
+
+                                // Skip if outside buffer bounds
+                                if x >= width || y >= height {
+                                    continue;
+                                }
+
+                                let idx = y * bytes_per_row + x * 4;
+                                if idx + 3 < buffer.len() {
+                                    buffer[idx] = color[0]; // Red
+                                    buffer[idx + 1] = color[1]; // Green
+                                    buffer[idx + 2] = color[2]; // Blue
+                                    buffer[idx + 3] = 255; // Alpha
+                                }
+                            }
                         }
                     }
                 }
@@ -701,7 +904,7 @@ define_class!(
                             let height = 600;
 
                             let mut renderer = ImageRenderer::new(PatternType::Text, width, height);
-                            renderer.set_filename(filename);
+                            renderer.set_text(Some("COMING SOON".to_string()), filename);
 
                             let renderer = Arc::new(Mutex::new(renderer));
                             *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
@@ -710,7 +913,7 @@ define_class!(
                             if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
                                 let mut renderer_guard = renderer.lock().unwrap();
                                 renderer_guard.change_pattern_type(PatternType::Text);
-                                renderer_guard.set_filename(filename);
+                                renderer_guard.set_text(Some("COMING SOON".to_string()), filename);
                             }
                         }
 
