@@ -433,7 +433,6 @@ struct AppState {
     view_y: f64,
     source_width: usize,
     source_height: usize,
-    selected_file_path: Option<String>,
     file_name: Option<String>,
     primary_text: Option<String>,
     secondary_text: Option<String>,
@@ -448,7 +447,6 @@ impl Default for AppState {
             view_y: 0.0,
             source_width: 800,
             source_height: 600,
-            selected_file_path: None,
             file_name: None,
             primary_text: Some("COMING SOON".to_string()),
             secondary_text: None,
@@ -1094,18 +1092,6 @@ impl AppDelegate {
         unsafe { image.addRepresentation(&rep) };
 
         Some(image)
-    }
-
-    // Pure function that generates an image based solely on the given state
-    fn generate_image_from_state(&self, state: &AppState) -> Option<Retained<NSImage>> {
-        // This function is now replaced by the combination of ensure_pattern_cache and generate_viewport_image
-        let source_pattern = self.generate_source_pattern_from_state(state);
-        self.generate_viewport_image(
-            &source_pattern,
-            state.zoom_level,
-            state.view_x,
-            state.view_y,
-        )
     }
 
     // Generate source pattern based solely on state
