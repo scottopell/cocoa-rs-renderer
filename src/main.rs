@@ -17,6 +17,7 @@ use objc2_app_kit::{
 use objc2_foundation::{
     ns_string, NSArray, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSURL,
 };
+use objc2_uniform_type_identifiers::UTType;
 
 //------------------------------------------------------------------------------
 // Bitmap Font Definition
@@ -978,8 +979,14 @@ define_class!(
                 panel.setCanChooseDirectories(false);
                 panel.setAllowsMultipleSelection(false);
 
-                let types = NSArray::from_slice(&[ns_string!("jp2")]);
-                panel.setAllowedFileTypes(Some(&types));
+                // Use UTType to specify JP2 content type
+                let jp2_type = UTType::typeWithFilenameExtension(ns_string!("jp2"));
+                if let Some(jp2_type) = jp2_type {
+                    let allowed_types = NSArray::from_slice(&[&*jp2_type]);
+                    panel.setAllowedContentTypes(&allowed_types);
+                } else {
+                    println!("DEBUG: Failed to create UTType for JP2, allowing all files");
+                }
 
                 let response = panel.runModal();
 
