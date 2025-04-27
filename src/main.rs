@@ -18,6 +18,295 @@ use objc2_foundation::{
     ns_string, NSArray, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSURL,
 };
 
+//------------------------------------------------------------------------------
+// Bitmap Font Definition
+//------------------------------------------------------------------------------
+// A simple 5x5 pixel bitmap font for rendering text in the image viewer
+// Each character is represented as a 5x5 grid of binary pixels (0 = transparent, 1 = filled)
+// This allows rendering text without requiring system fonts or text rendering libraries
+
+/// Bitmap definitions for characters, each as a 5x5 pixel grid
+/// The array contains 30 characters in the following order:
+/// C, O, M, I, N, G, S, P, J, 2, (space), F, L, E, D, T, A, R, B, 0-9, -, .
+const BITMAP_CHARS: [[[u8; 5]; 5]; 30] = [
+    // 0: C
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+    ],
+    // 1: O
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 2: M
+    [
+        [1, 0, 0, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+    ],
+    // 3: I
+    [
+        [0, 1, 1, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 1, 1, 0],
+    ],
+    // 4: N
+    [
+        [1, 0, 0, 0, 1],
+        [1, 1, 0, 0, 1],
+        [1, 0, 1, 0, 1],
+        [1, 0, 0, 1, 1],
+        [1, 0, 0, 0, 1],
+    ],
+    // 5: G
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 6: S
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 7: P
+    [
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+    ],
+    // 8: J
+    [
+        [0, 0, 1, 1, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 1, 0],
+        [1, 0, 0, 1, 0],
+        [0, 1, 1, 0, 0],
+    ],
+    // 9: 2
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 0, 1, 1, 0],
+        [0, 1, 0, 0, 0],
+        [1, 1, 1, 1, 1],
+    ],
+    // 10: SPACE
+    [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ],
+    // 11: F
+    [
+        [1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+    ],
+    // 12: L
+    [
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1],
+    ],
+    // 13: E
+    [
+        [1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1],
+    ],
+    // 14: D
+    [
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+    ],
+    // 15: T
+    [
+        [1, 1, 1, 1, 1],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+    ],
+    // 16: A
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+    ],
+    // 17: R
+    [
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+        [1, 0, 1, 0, 0],
+        [1, 0, 0, 1, 0],
+    ],
+    // 18: B
+    [
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+    ],
+    // 19: 0
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 20: 1
+    [
+        [0, 0, 1, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 1, 1, 0],
+    ],
+    // 21: 3
+    [
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 22: 4
+    [
+        [1, 0, 0, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1],
+        [0, 0, 0, 0, 1],
+    ],
+    // 23: 5
+    [
+        [1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0],
+        [0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 0],
+    ],
+    // 24: 6
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 25: 7
+    [
+        [1, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1],
+        [0, 0, 0, 1, 0],
+        [0, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0],
+    ],
+    // 26: 8
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 27: 9
+    [
+        [0, 1, 1, 1, 0],
+        [1, 0, 0, 0, 1],
+        [0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0],
+    ],
+    // 28: - (dash)
+    [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ],
+    // 29: . (period)
+    [
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+    ],
+];
+
+/// Mapping from characters to their index in the BITMAP_CHARS array
+/// This is used to quickly look up character bitmaps when rendering text
+/// Unknown characters will map to index 10 (space) as a fallback
+const CHAR_INDICES: [(char, usize); 30] = [
+    ('C', 0),
+    ('O', 1),
+    ('M', 2),
+    ('I', 3),
+    ('N', 4),
+    ('G', 5),
+    ('S', 6),
+    ('P', 7),
+    ('J', 8),
+    ('2', 9),
+    (' ', 10),
+    ('F', 11),
+    ('L', 12),
+    ('E', 13),
+    ('D', 14),
+    ('T', 15),
+    ('A', 16),
+    ('R', 17),
+    ('B', 18),
+    ('0', 19),
+    ('1', 20),
+    ('3', 21),
+    ('4', 22),
+    ('5', 23),
+    ('6', 24),
+    ('7', 25),
+    ('8', 26),
+    ('9', 27),
+    ('-', 28),
+    ('.', 29),
+];
+
 // Structure to hold source pattern and debug pixel data
 #[derive(Debug)]
 struct SourcePattern {
@@ -211,286 +500,9 @@ impl ImageRenderer {
             }
         }
 
-        // Characters we can draw (basic ASCII representation)
-        let characters = [
-            // C
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-                [0, 1, 1, 1, 0],
-            ],
-            // O
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // M
-            [
-                [1, 0, 0, 0, 1],
-                [1, 1, 0, 1, 1],
-                [1, 0, 1, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-            ],
-            // I
-            [
-                [0, 1, 1, 1, 0],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 1, 1, 1, 0],
-            ],
-            // N
-            [
-                [1, 0, 0, 0, 1],
-                [1, 1, 0, 0, 1],
-                [1, 0, 1, 0, 1],
-                [1, 0, 0, 1, 1],
-                [1, 0, 0, 0, 1],
-            ],
-            // G
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // S
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [0, 1, 1, 1, 0],
-                [0, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // P
-            [
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-            ],
-            // J
-            [
-                [0, 0, 1, 1, 0],
-                [0, 0, 0, 1, 0],
-                [0, 0, 0, 1, 0],
-                [1, 0, 0, 1, 0],
-                [0, 1, 1, 0, 0],
-            ],
-            // 2
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 0, 1, 1, 0],
-                [0, 1, 0, 0, 0],
-                [1, 1, 1, 1, 1],
-            ],
-            // SPACE
-            [
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-            ],
-            // F
-            [
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-            ],
-            // L
-            [
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 1],
-            ],
-            // E
-            [
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 1],
-            ],
-            // D
-            [
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-            ],
-            // T
-            [
-                [1, 1, 1, 1, 1],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-            ],
-            // A
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-            ],
-            // R
-            [
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-                [1, 0, 1, 0, 0],
-                [1, 0, 0, 1, 0],
-            ],
-            // B
-            [
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-            ],
-            // 0
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // 1
-            [
-                [0, 0, 1, 0, 0],
-                [0, 1, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 0, 1, 0, 0],
-                [0, 1, 1, 1, 0],
-            ],
-            // 3
-            [
-                [0, 1, 1, 1, 0],
-                [0, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-                [0, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // 4
-            [
-                [1, 0, 0, 0, 1],
-                [1, 0, 0, 0, 1],
-                [1, 1, 1, 1, 1],
-                [0, 0, 0, 0, 1],
-                [0, 0, 0, 0, 1],
-            ],
-            // 5
-            [
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 0],
-                [0, 0, 0, 0, 1],
-                [1, 1, 1, 1, 0],
-            ],
-            // 6
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 0],
-                [1, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // 7
-            [
-                [1, 1, 1, 1, 1],
-                [0, 0, 0, 0, 1],
-                [0, 0, 0, 1, 0],
-                [0, 0, 1, 0, 0],
-                [0, 1, 0, 0, 0],
-            ],
-            // 8
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // 9
-            [
-                [0, 1, 1, 1, 0],
-                [1, 0, 0, 0, 1],
-                [0, 1, 1, 1, 1],
-                [0, 0, 0, 0, 1],
-                [0, 1, 1, 1, 0],
-            ],
-            // - (dash)
-            [
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [1, 1, 1, 1, 1],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-            ],
-            // . (period)
-            [
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0],
-                [0, 0, 1, 0, 0],
-            ],
-        ];
-
         // Map characters to their index
-        let char_map: std::collections::HashMap<char, usize> = [
-            ('C', 0),
-            ('O', 1),
-            ('M', 2),
-            ('I', 3),
-            ('N', 4),
-            ('G', 5),
-            ('S', 6),
-            ('P', 7),
-            ('J', 8),
-            ('2', 9),
-            (' ', 10),
-            ('F', 11),
-            ('L', 12),
-            ('E', 13),
-            ('D', 14),
-            ('T', 15),
-            ('A', 16),
-            ('R', 17),
-            ('B', 18),
-            ('0', 19),
-            ('1', 20),
-            ('3', 21),
-            ('4', 22),
-            ('5', 23),
-            ('6', 24),
-            ('7', 25),
-            ('8', 26),
-            ('9', 27),
-            ('-', 28),
-            ('.', 29),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        let char_map: std::collections::HashMap<char, usize> =
+            CHAR_INDICES.iter().cloned().collect();
 
         // The primary text to display (default to "COMING SOON")
         let primary = self.primary_text.as_deref().unwrap_or("COMING SOON");
@@ -511,7 +523,7 @@ impl ImageRenderer {
             width,
             height,
             bytes_per_row,
-            &characters,
+            &BITMAP_CHARS,
             &char_map,
             primary,
             start_x,
@@ -545,7 +557,7 @@ impl ImageRenderer {
                 width,
                 height,
                 bytes_per_row,
-                &characters,
+                &BITMAP_CHARS,
                 &char_map,
                 &display_text.to_uppercase(),
                 secondary_x,
@@ -573,7 +585,7 @@ impl ImageRenderer {
                 width,
                 height,
                 bytes_per_row,
-                &characters,
+                &BITMAP_CHARS,
                 &char_map,
                 info_text,
                 info_x,
@@ -603,23 +615,24 @@ impl ImageRenderer {
         char_padding: usize,
         color: [u8; 3],
     ) {
+        // Scale factors to expand the 5x5 bitmap to the desired character size
+        let scale_x = char_width / 5;
+        let scale_y = char_height / 5;
+
+        // Render each character in the text
         for (i, c) in text.chars().enumerate() {
             // Get character bitmap or use space for unknown characters
-            let char_idx = char_map.get(&c).copied().unwrap_or(10); // Default to space
+            let char_idx = char_map.get(&c).copied().unwrap_or(10); // Default to space (index 10)
             let bitmap = &characters[char_idx];
 
-            // Character position
+            // Calculate position for this character
             let char_x = start_x + i * (char_width + char_padding);
 
-            // Scale the 5x5 bitmap to the desired size
-            let scale_x = char_width / 5;
-            let scale_y = char_height / 5;
-
-            // Draw the character
+            // Draw the character by scaling up the 5x5 bitmap
             for (y_idx, row) in bitmap.iter().enumerate() {
                 for (x_idx, &pixel) in row.iter().enumerate() {
                     if pixel == 1 {
-                        // Fill the scaled pixel area
+                        // For each pixel that's set in the bitmap, draw a scaled rectangle
                         for sy in 0..scale_y {
                             for sx in 0..scale_x {
                                 let x = char_x + x_idx * scale_x + sx;
@@ -630,12 +643,13 @@ impl ImageRenderer {
                                     continue;
                                 }
 
+                                // Set the pixel color
                                 let idx = y * bytes_per_row + x * 4;
                                 if idx + 3 < buffer.len() {
                                     buffer[idx] = color[0]; // Red
                                     buffer[idx + 1] = color[1]; // Green
                                     buffer[idx + 2] = color[2]; // Blue
-                                    buffer[idx + 3] = 255; // Alpha
+                                    buffer[idx + 3] = 255; // Alpha (fully opaque)
                                 }
                             }
                         }
@@ -653,30 +667,35 @@ impl ImageRenderer {
         height: usize,
         bytes_per_row: usize,
     ) {
-        // Border thickness
+        // Configuration
         let border_thickness = 3;
-        // Corner box size
         let corner_size = 15;
+
+        // Color definitions
+        let red = [255u8, 0, 0, 255]; // For borders and top-left corner
+        let green = [0u8, 255, 0, 255]; // For top-right corner
+        let blue = [0u8, 0, 255, 255]; // For bottom-left corner
+        let yellow = [255u8, 255, 0, 255]; // For bottom-right corner
 
         // Draw border - top and bottom edges
         for y in 0..border_thickness {
             // Top edge
             for x in 0..width {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = 255; // Red
-                buffer[idx + 1] = 0; // Green
-                buffer[idx + 2] = 0; // Blue
-                buffer[idx + 3] = 255; // Alpha
+                buffer[idx] = red[0]; // Red
+                buffer[idx + 1] = red[1]; // Green
+                buffer[idx + 2] = red[2]; // Blue
+                buffer[idx + 3] = red[3]; // Alpha
             }
 
             // Bottom edge
             if height > border_thickness {
                 for x in 0..width {
                     let idx = (height - 1 - y) * bytes_per_row + x * 4;
-                    buffer[idx] = 255; // Red
-                    buffer[idx + 1] = 0; // Green
-                    buffer[idx + 2] = 0; // Blue
-                    buffer[idx + 3] = 255; // Alpha
+                    buffer[idx] = red[0]; // Red
+                    buffer[idx + 1] = red[1]; // Green
+                    buffer[idx + 2] = red[2]; // Blue
+                    buffer[idx + 3] = red[3]; // Alpha
                 }
             }
         }
@@ -686,73 +705,79 @@ impl ImageRenderer {
             // Left edge
             for y in 0..height {
                 let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = 255; // Red
-                buffer[idx + 1] = 0; // Green
-                buffer[idx + 2] = 0; // Blue
-                buffer[idx + 3] = 255; // Alpha
+                buffer[idx] = red[0]; // Red
+                buffer[idx + 1] = red[1]; // Green
+                buffer[idx + 2] = red[2]; // Blue
+                buffer[idx + 3] = red[3]; // Alpha
             }
 
             // Right edge
             if width > border_thickness {
                 for y in 0..height {
                     let idx = y * bytes_per_row + (width - 1 - x) * 4;
-                    buffer[idx] = 255; // Red
-                    buffer[idx + 1] = 0; // Green
-                    buffer[idx + 2] = 0; // Blue
-                    buffer[idx + 3] = 255; // Alpha
+                    buffer[idx] = red[0]; // Red
+                    buffer[idx + 1] = red[1]; // Green
+                    buffer[idx + 2] = red[2]; // Blue
+                    buffer[idx + 3] = red[3]; // Alpha
                 }
             }
         }
 
-        // Draw colored corner boxes
+        // Draw colored corner boxes for easy orientation
+        self.draw_corner_box(buffer, bytes_per_row, 0, 0, corner_size, red); // Top-left (red)
 
-        // Top-left corner box (Red)
-        for y in 0..corner_size {
-            for x in 0..corner_size {
-                let idx = y * bytes_per_row + x * 4;
-                buffer[idx] = 255; // Red
-                buffer[idx + 1] = 0; // Green
-                buffer[idx + 2] = 0; // Blue
-                buffer[idx + 3] = 255; // Alpha
-            }
-        }
-
-        // Top-right corner box (Green)
         if width > corner_size {
-            for y in 0..corner_size {
-                for x in 0..corner_size {
-                    let idx = y * bytes_per_row + (width - corner_size + x) * 4;
-                    buffer[idx] = 0; // Red
-                    buffer[idx + 1] = 255; // Green
-                    buffer[idx + 2] = 0; // Blue
-                    buffer[idx + 3] = 255; // Alpha
-                }
-            }
+            self.draw_corner_box(
+                buffer,
+                bytes_per_row,
+                width - corner_size,
+                0,
+                corner_size,
+                green,
+            ); // Top-right (green)
         }
 
-        // Bottom-left corner box (Blue)
         if height > corner_size {
-            for y in 0..corner_size {
-                for x in 0..corner_size {
-                    let idx = (height - corner_size + y) * bytes_per_row + x * 4;
-                    buffer[idx] = 0; // Red
-                    buffer[idx + 1] = 0; // Green
-                    buffer[idx + 2] = 255; // Blue
-                    buffer[idx + 3] = 255; // Alpha
-                }
-            }
+            self.draw_corner_box(
+                buffer,
+                bytes_per_row,
+                0,
+                height - corner_size,
+                corner_size,
+                blue,
+            ); // Bottom-left (blue)
         }
 
-        // Bottom-right corner box (Yellow)
         if width > corner_size && height > corner_size {
-            for y in 0..corner_size {
-                for x in 0..corner_size {
-                    let idx =
-                        (height - corner_size + y) * bytes_per_row + (width - corner_size + x) * 4;
-                    buffer[idx] = 255; // Red
-                    buffer[idx + 1] = 255; // Green
-                    buffer[idx + 2] = 0; // Blue
-                    buffer[idx + 3] = 255; // Alpha
+            self.draw_corner_box(
+                buffer,
+                bytes_per_row,
+                width - corner_size,
+                height - corner_size,
+                corner_size,
+                yellow,
+            ); // Bottom-right (yellow)
+        }
+    }
+
+    // Helper method to draw a corner box
+    fn draw_corner_box(
+        &self,
+        buffer: &mut Vec<u8>,
+        bytes_per_row: usize,
+        start_x: usize,
+        start_y: usize,
+        size: usize,
+        color: [u8; 4],
+    ) {
+        for y in 0..size {
+            for x in 0..size {
+                let idx = (start_y + y) * bytes_per_row + (start_x + x) * 4;
+                if idx + 3 < buffer.len() {
+                    buffer[idx] = color[0]; // Red
+                    buffer[idx + 1] = color[1]; // Green
+                    buffer[idx + 2] = color[2]; // Blue
+                    buffer[idx + 3] = color[3]; // Alpha
                 }
             }
         }
