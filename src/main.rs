@@ -651,6 +651,53 @@ define_class!(
             Bool::NO
         }
 
+        #[unsafe(method(createCheckerboard:))]
+        fn createCheckerboard(&self, _sender: Option<&NSObject>) -> Bool {
+            println!("DEBUG: Creating checkerboard image");
+
+            // Check if we already have a renderer
+            let need_new_renderer = self.ivars().renderer.borrow().is_none();
+
+            if need_new_renderer {
+                // Create a new checkerboard image with renderer
+                let width = 800;
+                let height = 600;
+
+                let renderer = Arc::new(Mutex::new(
+                    ImageRenderer::new(PatternType::Checkerboard, width, height)
+                ));
+
+                *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
+            } else {
+                // Update existing renderer to use checkerboard pattern
+                if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                    let mut renderer_guard = renderer.lock().unwrap();
+                    renderer_guard.change_pattern_type(PatternType::Checkerboard);
+                }
+            }
+
+            // Render the image with the current renderer
+            if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                let image = {
+                    let renderer_guard = renderer.lock().unwrap();
+                    renderer_guard.render()
+                };
+
+                if let Some(image) = image {
+                    // Store the image in the delegate
+                    *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+
+                    // Display the image
+                    unsafe {
+                        let _: Bool = msg_send![self, handleDisplayImage];
+                        return Bool::YES;
+                    }
+                }
+            }
+
+            Bool::NO
+        }
+
         #[unsafe(method(handleDisplayImage))]
         unsafe fn handleDisplayImage(&self) -> Bool {
             println!("DEBUG: Starting display_image");
@@ -940,6 +987,25 @@ impl AppDelegate {
 
             let content_view = window.contentView().unwrap();
             content_view.addSubview(&gradient_button);
+        }
+
+        // Create Checkerboard button
+        let checkerboard_button_frame =
+            NSRect::new(NSPoint::new(260., 20.), NSSize::new(100., 30.));
+        let checkerboard_button =
+            unsafe { NSButton::initWithFrame(NSButton::alloc(mtm), checkerboard_button_frame) };
+
+        unsafe {
+            checkerboard_button.setTitle(ns_string!("Checkerboard"));
+            checkerboard_button.setBezelStyle(NSBezelStyle::Rounded);
+            checkerboard_button.setAction(Some(sel!(createCheckerboard:)));
+
+            // Convert self to AnyObject for target
+            let target: Option<&AnyObject> = Some(self.as_ref());
+            checkerboard_button.setTarget(target);
+
+            let content_view = window.contentView().unwrap();
+            content_view.addSubview(&checkerboard_button);
         }
     }
 
