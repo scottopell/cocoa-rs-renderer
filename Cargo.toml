@@ -6,8 +6,6 @@ edition = "2021"
 [dependencies]
 openjp2 = { version = "0.5.3", path = "../../openjp2/openjp2-rs" }
 
-objc = "0.2.7"
-cocoa = "0.24.0"
-core-foundation = "0.9.3"
-core-graphics = "0.22.3"
-foreign-types = "0.3.2"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSAutoreleasePool"] }
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSWindow", "NSButton", "NSImageView", "NSImage"] }
