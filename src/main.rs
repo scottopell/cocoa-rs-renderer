@@ -313,7 +313,7 @@ struct SourcePattern {
 }
 
 // Enum to represent different pattern types
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum PatternType {
     Checkerboard,
     Gradient,
@@ -396,6 +396,17 @@ impl CustomImageView {
     }
 }
 
+// Add the CachedSourcePattern struct
+#[derive(Debug)]
+struct CachedSourcePattern {
+    pattern: SourcePattern,
+    pattern_type: PatternType,
+    primary_text: Option<String>,
+    secondary_text: Option<String>,
+    source_width: usize,
+    source_height: usize,
+}
+
 // Define the app delegate with ivars
 #[derive(Debug, Default)]
 struct AppDelegateIvars {
@@ -410,6 +421,7 @@ struct AppDelegateIvars {
     magnification_recognizer: OnceCell<Retained<NSMagnificationGestureRecognizer>>,
     base_zoom_level: RefCell<f64>,
     state: RefCell<AppState>,
+    cached_pattern: RefCell<Option<CachedSourcePattern>>,
 }
 
 // State container for state-forward architecture
@@ -481,8 +493,11 @@ define_class!(
                 state.primary_text = Some("COMING SOON".to_string());
             }
 
+            // Initialize the pattern cache
+            let _ = self.ensure_pattern_cache();
+
             // Render initial UI
-            let _ = self.render_ui();
+            let _ = self.render_viewport();
 
             // Activate app and make window visible
             let app = NSApplication::sharedApplication(mtm);
@@ -569,7 +584,7 @@ define_class!(
                             state.zoom_level = 1.0;
                         }
 
-                        // Render UI based on updated state
+                        // Full render (will regenerate pattern since content changed)
                         return self.render_ui();
                     }
                 }
@@ -585,7 +600,7 @@ define_class!(
             // Update state
             self.ivars().state.borrow_mut().pattern_type = PatternType::Gradient;
 
-            // Render UI based on updated state
+            // Full render (will regenerate pattern since type changed)
             self.render_ui()
         }
 
@@ -596,7 +611,7 @@ define_class!(
             // Update state
             self.ivars().state.borrow_mut().pattern_type = PatternType::Checkerboard;
 
-            // Render UI based on updated state
+            // Full render (will regenerate pattern since type changed)
             self.render_ui()
         }
 
@@ -609,8 +624,8 @@ define_class!(
                 // Update state
                 self.ivars().state.borrow_mut().zoom_level = slider_value.max(0.1).min(10.0);
 
-                // Render UI based on updated state
-                self.render_ui()
+                // Only render the viewport (not regenerate pattern)
+                self.render_viewport()
             } else {
                 Bool::NO
             }
@@ -644,8 +659,8 @@ define_class!(
                     state.view_y -= delta_y;
                 }
 
-                // Render UI based on updated state
-                let _ = self.render_ui();
+                // Only render the viewport (not regenerate pattern)
+                let _ = self.render_viewport();
 
                 *self.ivars().last_mouse_location.borrow_mut() = current_location;
                 return Bool::YES;
@@ -686,8 +701,8 @@ define_class!(
                     // Update state with new zoom level
                     self.ivars().state.borrow_mut().zoom_level = new_zoom.max(0.1).min(10.0);
 
-                    // Render UI based on updated state
-                    return self.render_ui();
+                    // Only render the viewport (not regenerate pattern)
+                    return self.render_viewport();
                 }
             }
 
@@ -702,6 +717,7 @@ impl AppDelegate {
         let ivars = AppDelegateIvars {
             base_zoom_level: RefCell::new(1.0),
             state: RefCell::new(AppState::default()),
+            cached_pattern: RefCell::new(None),
             ..Default::default()
         };
         let this = Self::alloc(mtm).set_ivars(ivars);
@@ -895,53 +911,111 @@ impl AppDelegate {
 
     // Central render function that updates UI based on state
     fn render_ui(&self) -> Bool {
+        // First ensure we have the right pattern cached
+        self.ensure_pattern_cache();
+
+        // Then render the viewport based on current view parameters
+        self.render_viewport()
+    }
+
+    // Ensure the pattern cache is up to date
+    fn ensure_pattern_cache(&self) -> Bool {
         let state = self.ivars().state.borrow();
+        let cache = self.ivars().cached_pattern.borrow();
 
-        // Generate image from state
-        if let Some(image) = self.generate_image_from_state(&*state) {
-            // Store the generated image
-            *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
-
-            // Update image view
-            if let Some(image_view) = self.ivars().image_view.get() {
-                unsafe {
-                    image_view.setImage(Some(&image));
-
-                    let image_size = image.size();
-                    let frame = NSRect::new(NSPoint::new(0.0, 0.0), image_size);
-                    image_view.setFrame(frame);
-                }
+        // Check if we need to regenerate the pattern
+        let regenerate = match &*cache {
+            None => true,
+            Some(cached) => {
+                cached.pattern_type != state.pattern_type
+                    || cached.primary_text != state.primary_text
+                    || cached.secondary_text != state.secondary_text
+                    || cached.source_width != state.source_width
+                    || cached.source_height != state.source_height
             }
+        };
 
-            // Update scroll view
-            if let Some(scroll_view) = self.ivars().scroll_view.get() {
-                unsafe {
-                    scroll_view
-                        .documentView()
-                        .unwrap()
-                        .setFrame(self.ivars().image_view.get().unwrap().frame());
-                    scroll_view.setNeedsDisplay(true);
+        if regenerate {
+            // Generate new pattern and store in cache
+            drop(cache); // Release the borrowed reference
+
+            let source_pattern = self.generate_source_pattern_from_state(&*state);
+            *self.ivars().cached_pattern.borrow_mut() = Some(CachedSourcePattern {
+                pattern: source_pattern,
+                pattern_type: state.pattern_type.clone(),
+                primary_text: state.primary_text.clone(),
+                secondary_text: state.secondary_text.clone(),
+                source_width: state.source_width,
+                source_height: state.source_height,
+            });
+        }
+
+        Bool::YES
+    }
+
+    // Render the viewport based on current view parameters
+    fn render_viewport(&self) -> Bool {
+        let state = self.ivars().state.borrow();
+        let cache = self.ivars().cached_pattern.borrow();
+
+        if let Some(cached_pattern) = &*cache {
+            // Create viewport image by transforming the cached source pattern
+            if let Some(image) = self.generate_viewport_image(
+                &cached_pattern.pattern,
+                state.zoom_level,
+                state.view_x,
+                state.view_y,
+            ) {
+                // Store the generated image
+                *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+
+                // Update image view
+                if let Some(image_view) = self.ivars().image_view.get() {
+                    unsafe {
+                        image_view.setImage(Some(&image));
+
+                        let image_size = image.size();
+                        let frame = NSRect::new(NSPoint::new(0.0, 0.0), image_size);
+                        image_view.setFrame(frame);
+                    }
                 }
-            }
 
-            // Update zoom slider to match current zoom level
-            if let Some(slider) = self.ivars().zoom_slider.get() {
-                unsafe {
-                    slider.setDoubleValue(state.zoom_level);
+                // Update scroll view
+                if let Some(scroll_view) = self.ivars().scroll_view.get() {
+                    unsafe {
+                        scroll_view
+                            .documentView()
+                            .unwrap()
+                            .setFrame(self.ivars().image_view.get().unwrap().frame());
+                        scroll_view.setNeedsDisplay(true);
+                    }
                 }
-            }
 
-            return Bool::YES;
+                // Update zoom slider to match current zoom level
+                if let Some(slider) = self.ivars().zoom_slider.get() {
+                    unsafe {
+                        slider.setDoubleValue(state.zoom_level);
+                    }
+                }
+
+                return Bool::YES;
+            }
         }
 
         Bool::NO
     }
 
-    // Pure function that generates an image based solely on the given state
-    fn generate_image_from_state(&self, state: &AppState) -> Option<Retained<NSImage>> {
+    // Generate viewport image from source pattern
+    fn generate_viewport_image(
+        &self,
+        source_pattern: &SourcePattern,
+        zoom_level: f64,
+        view_x: f64,
+        view_y: f64,
+    ) -> Option<Retained<NSImage>> {
         // Viewport dimensions based on source dimensions and zoom level
-        let viewport_width = (state.source_width as f64 * state.zoom_level) as usize;
-        let viewport_height = (state.source_height as f64 * state.zoom_level) as usize;
+        let viewport_width = (source_pattern.width as f64 * zoom_level) as usize;
+        let viewport_height = (source_pattern.height as f64 * zoom_level) as usize;
 
         // Create a new image of the viewport size
         let size = NSSize::new(viewport_width as f64, viewport_height as f64);
@@ -980,14 +1054,11 @@ impl AppDelegate {
             return None;
         }
 
-        // Generate appropriate source pattern
-        let source_pattern = self.generate_source_pattern_from_state(state);
-
         // Apply zooming and panning to source pattern to generate final image
         unsafe {
-            let scale_factor = 1.0 / state.zoom_level;
-            let start_src_x = (state.view_x * scale_factor) as usize;
-            let start_src_y = (state.view_y * scale_factor) as usize;
+            let scale_factor = 1.0 / zoom_level;
+            let start_src_x = (view_x * scale_factor) as usize;
+            let start_src_y = (view_y * scale_factor) as usize;
 
             for y in 0..viewport_height {
                 for x in 0..viewport_width {
@@ -1023,6 +1094,18 @@ impl AppDelegate {
         unsafe { image.addRepresentation(&rep) };
 
         Some(image)
+    }
+
+    // Pure function that generates an image based solely on the given state
+    fn generate_image_from_state(&self, state: &AppState) -> Option<Retained<NSImage>> {
+        // This function is now replaced by the combination of ensure_pattern_cache and generate_viewport_image
+        let source_pattern = self.generate_source_pattern_from_state(state);
+        self.generate_viewport_image(
+            &source_pattern,
+            state.zoom_level,
+            state.view_x,
+            state.view_y,
+        )
     }
 
     // Generate source pattern based solely on state
