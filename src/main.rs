@@ -325,6 +325,134 @@ impl ImageRenderer {
                 [1, 0, 0, 0, 0],
                 [1, 1, 1, 1, 1],
             ],
+            // D
+            [
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+            ],
+            // T
+            [
+                [1, 1, 1, 1, 1],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+            ],
+            // A
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+            ],
+            // R
+            [
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+                [1, 0, 1, 0, 0],
+                [1, 0, 0, 1, 0],
+            ],
+            // B
+            [
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+            ],
+            // 0
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // 1
+            [
+                [0, 0, 1, 0, 0],
+                [0, 1, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 1, 1, 1, 0],
+            ],
+            // 3
+            [
+                [0, 1, 1, 1, 0],
+                [0, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+                [0, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // 4
+            [
+                [1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 1],
+                [0, 0, 0, 0, 1],
+            ],
+            // 5
+            [
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 0],
+                [0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 0],
+            ],
+            // 6
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // 7
+            [
+                [1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 1],
+                [0, 0, 0, 1, 0],
+                [0, 0, 1, 0, 0],
+                [0, 1, 0, 0, 0],
+            ],
+            // 8
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // 9
+            [
+                [0, 1, 1, 1, 0],
+                [1, 0, 0, 0, 1],
+                [0, 1, 1, 1, 1],
+                [0, 0, 0, 0, 1],
+                [0, 1, 1, 1, 0],
+            ],
+            // - (dash)
+            [
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+            ],
+            // . (period)
+            [
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+            ],
         ];
 
         // Map characters to their index
@@ -343,6 +471,22 @@ impl ImageRenderer {
             ('F', 11),
             ('L', 12),
             ('E', 13),
+            ('D', 14),
+            ('T', 15),
+            ('A', 16),
+            ('R', 17),
+            ('B', 18),
+            ('0', 19),
+            ('1', 20),
+            ('3', 21),
+            ('4', 22),
+            ('5', 23),
+            ('6', 24),
+            ('7', 25),
+            ('8', 26),
+            ('9', 27),
+            ('-', 28),
+            ('.', 29),
         ]
         .iter()
         .cloned()
@@ -387,7 +531,7 @@ impl ImageRenderer {
 
             // Limit the secondary text length if needed
             let display_text = if secondary_text.len() > 30 {
-                format!("{:.27}...", secondary_text)
+                format!("{}...", &secondary_text[0..27])
             } else {
                 secondary_text.to_string()
             };
@@ -888,12 +1032,35 @@ define_class!(
                         // Store the path
                         *self.ivars().selected_file_path.borrow_mut() = Some(url.clone());
 
-                        // For now, just extract a simple placeholder from the URL using debug output
-                        let url_debug = format!("{:?}", url);
-                        let filename = Some(format!("JP2 File"));
+                        // Extract the actual filename from the URL
+                        let filename = {
+                            // Log the raw URL for debugging
+                            println!("DEBUG: Raw URL: {:?}", url);
+
+                            // Get URL string from NSURLs path() method which is safer than debug formatting
+                            let url_path = {
+                                if let Some(path) = url.path().as_deref() {
+                                    let ns_string = path.to_owned();
+                                    // Convert NSString to Rust String - use display instead of debug
+                                    format!("{}", &*ns_string)
+                                } else {
+                                    "unknown_path".to_string()
+                                }
+                            };
+
+                            println!("DEBUG: Extracted path: {}", url_path);
+
+                            // Extract just the filename portion
+                            let filename = url_path.split('/').last()
+                                .unwrap_or("JP2 File")
+                                .to_string();
+
+                            println!("DEBUG: Extracted filename: {}", filename);
+                            Some(filename)
+                        };
 
                         // Show the "Coming Soon" text pattern since JP2 loading is not implemented yet
-                        println!("DEBUG: Showing Coming Soon text pattern for JP2 file");
+                        println!("DEBUG: Showing Coming Soon text pattern for JP2 file: {:?}", filename);
 
                         // Check if we already have a renderer
                         let need_new_renderer = self.ivars().renderer.borrow().is_none();
