@@ -18,6 +18,15 @@ use objc2_foundation::{
     ns_string, NSArray, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSURL,
 };
 
+// Structure to hold source pattern and debug pixel data
+#[derive(Debug)]
+struct SourcePattern {
+    buffer: Vec<u8>,
+    width: usize,
+    height: usize,
+    bytes_per_row: usize,
+}
+
 // Structure to hold rendering information
 #[derive(Debug)]
 struct ImageRenderer {
@@ -32,6 +41,9 @@ struct ImageRenderer {
 
     // Pattern type
     pattern_type: PatternType,
+
+    // Source pattern with debug borders
+    source_pattern: Option<SourcePattern>,
 }
 
 // Enum to represent different pattern types
@@ -43,14 +55,20 @@ enum PatternType {
 
 impl ImageRenderer {
     fn new(pattern_type: PatternType, width: usize, height: usize) -> Self {
-        Self {
+        let mut renderer = Self {
             source_width: width,
             source_height: height,
             zoom_level: 1.0,
             view_x: 0.0,
             view_y: 0.0,
             pattern_type,
-        }
+            source_pattern: None,
+        };
+
+        // Create the source pattern
+        renderer.generate_source_pattern();
+
+        renderer
     }
 
     fn set_zoom(&mut self, zoom: f64) {
@@ -62,121 +80,234 @@ impl ImageRenderer {
         self.view_y = y;
     }
 
+    // Change the pattern type while preserving other settings
+    fn change_pattern_type(&mut self, pattern_type: PatternType) {
+        self.pattern_type = pattern_type;
+        // Regenerate the source pattern with the new type
+        self.generate_source_pattern();
+    }
+
     fn get_viewport_size(&self) -> (usize, usize) {
         let width = (self.source_width as f64 * self.zoom_level) as usize;
         let height = (self.source_height as f64 * self.zoom_level) as usize;
         (width, height)
     }
 
-    fn render(&self) -> Option<Retained<NSImage>> {
-        let (width, height) = self.get_viewport_size();
+    // Generate the source pattern with borders
+    fn generate_source_pattern(&mut self) {
+        let width = self.source_width;
+        let height = self.source_height;
+        let bytes_per_row = width * 4; // RGBA format
+        let buffer_size = bytes_per_row * height;
+        let mut buffer = vec![0; buffer_size];
 
+        // Generate the base pattern
         match self.pattern_type {
-            PatternType::Checkerboard => self.create_checkerboard_image(width, height),
-            PatternType::Gradient => self.create_gradient_image(width, height),
+            PatternType::Checkerboard => {
+                self.generate_checkerboard(&mut buffer, width, height, bytes_per_row)
+            }
+            PatternType::Gradient => {
+                self.generate_gradient(&mut buffer, width, height, bytes_per_row)
+            }
+        }
+
+        // Add debug borders and corners
+        self.add_debug_borders(&mut buffer, width, height, bytes_per_row);
+
+        // Store the pattern
+        self.source_pattern = Some(SourcePattern {
+            buffer,
+            width,
+            height,
+            bytes_per_row,
+        });
+    }
+
+    // Generate a checkerboard pattern
+    fn generate_checkerboard(
+        &self,
+        buffer: &mut Vec<u8>,
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+    ) {
+        let square_size = 20; // Size of each checkerboard square
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * bytes_per_row + x * 4;
+
+                // Determine if this pixel should be black or white
+                let is_white = ((x / square_size) + (y / square_size)) % 2 == 0;
+
+                let color = if is_white { 255u8 } else { 0u8 };
+
+                buffer[idx] = color; // Red
+                buffer[idx + 1] = color; // Green
+                buffer[idx + 2] = color; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
         }
     }
 
-    // Moved from AppDelegate and adapted for zooming/panning
-    fn create_gradient_image(&self, width: usize, height: usize) -> Option<Retained<NSImage>> {
-        let size = NSSize::new(width as f64, height as f64);
+    // Generate a gradient pattern
+    fn generate_gradient(
+        &self,
+        buffer: &mut Vec<u8>,
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+    ) {
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * bytes_per_row + x * 4;
 
-        let alloc = NSImage::alloc();
-        let image = unsafe { NSImage::initWithSize(alloc, size) };
+                // Create a blue to white gradient
+                let r = ((x as f64) / (width as f64) * 255.0) as u8;
+                let g = ((y as f64) / (height as f64) * 255.0) as u8;
+                let b = 200u8;
 
-        // Create a bitmap representation
-        let alloc = NSBitmapImageRep::alloc();
-        let color_space_name = ns_string!("NSDeviceRGBColorSpace");
-
-        let bits_per_component = 8;
-        let bytes_per_row = width * 4; // RGBA format
-
-        let rep = unsafe {
-            let planes: *const *mut u8 = std::ptr::null();
-            let rep: Retained<NSBitmapImageRep> = msg_send![alloc,
-                initWithBitmapDataPlanes: planes,
-                pixelsWide: width as isize,
-                pixelsHigh: height as isize,
-                bitsPerSample: bits_per_component as isize,
-                samplesPerPixel: 4 as isize,
-                hasAlpha: true,
-                isPlanar: false,
-                colorSpaceName: &*color_space_name,
-                bytesPerRow: bytes_per_row as isize,
-                bitsPerPixel: 32 as isize
-            ];
-
-            rep
-        };
-
-        // Get bitmap data buffer
-        let buffer: *mut u8 = unsafe { msg_send![&*rep, bitmapData] };
-
-        if buffer.is_null() {
-            println!("Failed to get bitmap data");
-            return None;
+                buffer[idx] = r; // Red
+                buffer[idx + 1] = g; // Green
+                buffer[idx + 2] = b; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
         }
+    }
 
-        // Fill with a gradient
-        unsafe {
-            let bytes_per_row = width * 4;
+    // Add debug borders and corner markers to the source pattern
+    fn add_debug_borders(
+        &self,
+        buffer: &mut Vec<u8>,
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+    ) {
+        // Border thickness
+        let border_thickness = 3;
+        // Corner box size
+        let corner_size = 15;
 
-            // Calculate viewport to source image mapping
-            let scale_factor = 1.0 / self.zoom_level;
-            let start_src_x = (self.view_x * scale_factor) as usize;
-            let start_src_y = (self.view_y * scale_factor) as usize;
+        // Draw border - top and bottom edges
+        for y in 0..border_thickness {
+            // Top edge
+            for x in 0..width {
+                let idx = y * bytes_per_row + x * 4;
+                buffer[idx] = 255; // Red
+                buffer[idx + 1] = 0; // Green
+                buffer[idx + 2] = 0; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
 
-            for y in 0..height {
+            // Bottom edge
+            if height > border_thickness {
                 for x in 0..width {
-                    let buffer_index = (y * bytes_per_row + x * 4) as isize;
-
-                    // Map viewport position to source image coordinates
-                    let src_x = start_src_x + (x as f64 * scale_factor) as usize;
-                    let src_y = start_src_y + (y as f64 * scale_factor) as usize;
-
-                    // Use clamped source coordinates to generate gradient
-                    let src_x_clamped = src_x.min(self.source_width - 1);
-                    let src_y_clamped = src_y.min(self.source_height - 1);
-
-                    // Create a blue to white gradient
-                    let r = ((src_x_clamped as f64) / (self.source_width as f64) * 255.0) as u8;
-                    let g = ((src_y_clamped as f64) / (self.source_height as f64) * 255.0) as u8;
-                    let b = 200u8;
-
-                    *buffer.offset(buffer_index) = r; // Red
-                    *buffer.offset(buffer_index + 1) = g; // Green
-                    *buffer.offset(buffer_index + 2) = b; // Blue
-                    *buffer.offset(buffer_index + 3) = 255; // Alpha
+                    let idx = (height - 1 - y) * bytes_per_row + x * 4;
+                    buffer[idx] = 255; // Red
+                    buffer[idx + 1] = 0; // Green
+                    buffer[idx + 2] = 0; // Blue
+                    buffer[idx + 3] = 255; // Alpha
                 }
             }
         }
 
-        // Add the bitmap representation to the image
-        unsafe { image.addRepresentation(&rep) };
+        // Draw border - left and right edges
+        for x in 0..border_thickness {
+            // Left edge
+            for y in 0..height {
+                let idx = y * bytes_per_row + x * 4;
+                buffer[idx] = 255; // Red
+                buffer[idx + 1] = 0; // Green
+                buffer[idx + 2] = 0; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
 
-        Some(image)
+            // Right edge
+            if width > border_thickness {
+                for y in 0..height {
+                    let idx = y * bytes_per_row + (width - 1 - x) * 4;
+                    buffer[idx] = 255; // Red
+                    buffer[idx + 1] = 0; // Green
+                    buffer[idx + 2] = 0; // Blue
+                    buffer[idx + 3] = 255; // Alpha
+                }
+            }
+        }
+
+        // Draw colored corner boxes
+
+        // Top-left corner box (Red)
+        for y in 0..corner_size {
+            for x in 0..corner_size {
+                let idx = y * bytes_per_row + x * 4;
+                buffer[idx] = 255; // Red
+                buffer[idx + 1] = 0; // Green
+                buffer[idx + 2] = 0; // Blue
+                buffer[idx + 3] = 255; // Alpha
+            }
+        }
+
+        // Top-right corner box (Green)
+        if width > corner_size {
+            for y in 0..corner_size {
+                for x in 0..corner_size {
+                    let idx = y * bytes_per_row + (width - corner_size + x) * 4;
+                    buffer[idx] = 0; // Red
+                    buffer[idx + 1] = 255; // Green
+                    buffer[idx + 2] = 0; // Blue
+                    buffer[idx + 3] = 255; // Alpha
+                }
+            }
+        }
+
+        // Bottom-left corner box (Blue)
+        if height > corner_size {
+            for y in 0..corner_size {
+                for x in 0..corner_size {
+                    let idx = (height - corner_size + y) * bytes_per_row + x * 4;
+                    buffer[idx] = 0; // Red
+                    buffer[idx + 1] = 0; // Green
+                    buffer[idx + 2] = 255; // Blue
+                    buffer[idx + 3] = 255; // Alpha
+                }
+            }
+        }
+
+        // Bottom-right corner box (Yellow)
+        if width > corner_size && height > corner_size {
+            for y in 0..corner_size {
+                for x in 0..corner_size {
+                    let idx =
+                        (height - corner_size + y) * bytes_per_row + (width - corner_size + x) * 4;
+                    buffer[idx] = 255; // Red
+                    buffer[idx + 1] = 255; // Green
+                    buffer[idx + 2] = 0; // Blue
+                    buffer[idx + 3] = 255; // Alpha
+                }
+            }
+        }
     }
 
-    // Moved from AppDelegate and adapted for zooming/panning
-    fn create_checkerboard_image(&self, width: usize, height: usize) -> Option<Retained<NSImage>> {
-        let size = NSSize::new(width as f64, height as f64);
+    fn render(&self) -> Option<Retained<NSImage>> {
+        let (viewport_width, viewport_height) = self.get_viewport_size();
 
+        // Create a new image of the viewport size
+        let size = NSSize::new(viewport_width as f64, viewport_height as f64);
         let alloc = NSImage::alloc();
         let image = unsafe { NSImage::initWithSize(alloc, size) };
 
-        // Create a bitmap representation
+        // Create a bitmap representation for the viewport
         let alloc = NSBitmapImageRep::alloc();
         let color_space_name = ns_string!("NSDeviceRGBColorSpace");
-
         let bits_per_component = 8;
-        let bytes_per_row = width * 4; // RGBA format
+        let bytes_per_row = viewport_width * 4; // RGBA format
 
         let rep = unsafe {
             let planes: *const *mut u8 = std::ptr::null();
             let rep: Retained<NSBitmapImageRep> = msg_send![alloc,
                 initWithBitmapDataPlanes: planes,
-                pixelsWide: width as isize,
-                pixelsHigh: height as isize,
+                pixelsWide: viewport_width as isize,
+                pixelsHigh: viewport_height as isize,
                 bitsPerSample: bits_per_component as isize,
                 samplesPerPixel: 4 as isize,
                 hasAlpha: true,
@@ -197,33 +328,44 @@ impl ImageRenderer {
             return None;
         }
 
-        // Fill with a checkerboard pattern
-        unsafe {
-            let bytes_per_row = width * 4;
-            let square_size = 20; // Size of each checkerboard square
+        // Apply zooming and panning
+        if let Some(source) = &self.source_pattern {
+            unsafe {
+                // Calculate scaling factor and starting position
+                let scale_factor = 1.0 / self.zoom_level;
+                let start_src_x = (self.view_x * scale_factor) as usize;
+                let start_src_y = (self.view_y * scale_factor) as usize;
 
-            // Calculate viewport to source image mapping
-            let scale_factor = 1.0 / self.zoom_level;
-            let start_src_x = (self.view_x * scale_factor) as usize;
-            let start_src_y = (self.view_y * scale_factor) as usize;
+                for y in 0..viewport_height {
+                    for x in 0..viewport_width {
+                        let dst_idx = (y * bytes_per_row + x * 4) as isize;
 
-            for y in 0..height {
-                for x in 0..width {
-                    let buffer_index = (y * bytes_per_row + x * 4) as isize;
+                        // Map viewport position to source pattern coordinates
+                        let src_x = start_src_x + (x as f64 * scale_factor) as usize;
+                        let src_y = start_src_y + (y as f64 * scale_factor) as usize;
 
-                    // Map viewport position to source image coordinates
-                    let src_x = start_src_x + (x as f64 * scale_factor) as usize;
-                    let src_y = start_src_y + (y as f64 * scale_factor) as usize;
+                        // Clamp source coordinates to valid range
+                        let src_x_clamped = src_x.min(source.width - 1);
+                        let src_y_clamped = src_y.min(source.height - 1);
 
-                    // Determine if this pixel should be black or white
-                    let is_white = ((src_x / square_size) + (src_y / square_size)) % 2 == 0;
+                        // Calculate source index
+                        let src_idx = src_y_clamped * source.bytes_per_row + src_x_clamped * 4;
 
-                    let color = if is_white { 255u8 } else { 0u8 };
-
-                    *buffer.offset(buffer_index) = color; // Red
-                    *buffer.offset(buffer_index + 1) = color; // Green
-                    *buffer.offset(buffer_index + 2) = color; // Blue
-                    *buffer.offset(buffer_index + 3) = 255; // Alpha
+                        // Copy pixel from source to destination
+                        if src_idx + 3 < source.buffer.len() {
+                            *buffer.offset(dst_idx) = source.buffer[src_idx]; // Red
+                            *buffer.offset(dst_idx + 1) = source.buffer[src_idx + 1]; // Green
+                            *buffer.offset(dst_idx + 2) = source.buffer[src_idx + 2]; // Blue
+                            *buffer.offset(dst_idx + 3) = source.buffer[src_idx + 3];
+                        // Alpha
+                        } else {
+                            // If out of bounds, set to a distinctive color (purple)
+                            *buffer.offset(dst_idx) = 128; // Red
+                            *buffer.offset(dst_idx + 1) = 0; // Green
+                            *buffer.offset(dst_idx + 2) = 128; // Blue
+                            *buffer.offset(dst_idx + 3) = 255; // Alpha
+                        }
+                    }
                 }
             }
         }
@@ -419,28 +561,41 @@ define_class!(
                         // Store the path
                         *self.ivars().selected_file_path.borrow_mut() = Some(url.clone());
 
-                        // Create checkerboard pattern with renderer
-                        let width = 800;
-                        let height = 600;
+                        // Check if we already have a renderer
+                        let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
-                        let renderer = Arc::new(Mutex::new(
-                            ImageRenderer::new(PatternType::Checkerboard, width, height)
-                        ));
+                        if need_new_renderer {
+                            // Create checkerboard pattern with renderer
+                            let width = 800;
+                            let height = 600;
 
-                        *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
+                            let renderer = Arc::new(Mutex::new(
+                                ImageRenderer::new(PatternType::Checkerboard, width, height)
+                            ));
 
-                        // Render the image
-                        let image = {
-                            let renderer_guard = renderer.lock().unwrap();
-                            renderer_guard.render()
-                        };
+                            *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
+                        } else {
+                            // Update existing renderer to use checkerboard pattern
+                            if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                                let mut renderer_guard = renderer.lock().unwrap();
+                                renderer_guard.change_pattern_type(PatternType::Checkerboard);
+                            }
+                        }
 
-                        if let Some(image) = image {
-                            *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+                        // Render the image with the current renderer
+                        if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                            let image = {
+                                let renderer_guard = renderer.lock().unwrap();
+                                renderer_guard.render()
+                            };
 
-                            // Display the image
-                            let _: Bool = msg_send![self, handleDisplayImage];
-                            return Bool::YES;
+                            if let Some(image) = image {
+                                *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+
+                                // Display the image
+                                let _: Bool = msg_send![self, handleDisplayImage];
+                                return Bool::YES;
+                            }
                         }
                     }
                 }
@@ -453,30 +608,43 @@ define_class!(
         fn createGradient(&self, _sender: Option<&NSObject>) -> Bool {
             println!("DEBUG: Creating gradient image");
 
-            // Create a gradient image with renderer
-            let width = 800;
-            let height = 600;
+            // Check if we already have a renderer
+            let need_new_renderer = self.ivars().renderer.borrow().is_none();
 
-            let renderer = Arc::new(Mutex::new(
-                ImageRenderer::new(PatternType::Gradient, width, height)
-            ));
+            if need_new_renderer {
+                // Create a new gradient image with renderer
+                let width = 800;
+                let height = 600;
 
-            *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
+                let renderer = Arc::new(Mutex::new(
+                    ImageRenderer::new(PatternType::Gradient, width, height)
+                ));
 
-            // Render the image
-            let image = {
-                let renderer_guard = renderer.lock().unwrap();
-                renderer_guard.render()
-            };
+                *self.ivars().renderer.borrow_mut() = Some(renderer.clone());
+            } else {
+                // Update existing renderer to use gradient pattern
+                if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                    let mut renderer_guard = renderer.lock().unwrap();
+                    renderer_guard.change_pattern_type(PatternType::Gradient);
+                }
+            }
 
-            if let Some(image) = image {
-                // Store the image in the delegate
-                *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+            // Render the image with the current renderer
+            if let Some(renderer) = self.ivars().renderer.borrow().as_ref() {
+                let image = {
+                    let renderer_guard = renderer.lock().unwrap();
+                    renderer_guard.render()
+                };
 
-                // Display the image
-                unsafe {
-                    let _: Bool = msg_send![self, handleDisplayImage];
-                    return Bool::YES;
+                if let Some(image) = image {
+                    // Store the image in the delegate
+                    *self.ivars().decoded_image.borrow_mut() = Some(image.clone());
+
+                    // Display the image
+                    unsafe {
+                        let _: Bool = msg_send![self, handleDisplayImage];
+                        return Bool::YES;
+                    }
                 }
             }
 
